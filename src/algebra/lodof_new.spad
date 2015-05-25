@@ -1,0 +1,113 @@
+)abbrev package LODOFN LinearOrdinaryDifferentialOperatorFactorizerNew
+++ Description:
+++ \spadtype{LinearOrdinaryDifferentialOperatorFactorizerNew} provides a
+++ factorizer for linear ordinary differential operators whose coefficients
+++ are rational functions.
+++ Keywords: differential equation, ODE, LODO, factoring
+LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP) : Exports == Impl where
+  F : Join(Field, CharacteristicZero,
+           RetractableTo Integer, RetractableTo Fraction Integer)
+  UP : UnivariatePolynomialCategory F
+
+  RF ==> Fraction UP
+  L  ==> LinearOrdinaryDifferentialOperator1 RF
+  L2 ==> LinearOrdinaryDifferentialOperator2(UP, RF)
+  L3 ==> LinearOrdinaryDifferentialOperator3(F, UP, RF)
+  PO ==> Record(x : Integer, y : Integer)
+  FZ ==> Union(Fraction Integer, "failed")
+  U ==> Union(UP, "failed")
+
+  Exports ==> with
+    testnp : L -> List(Record(point : PO, slope : FZ, npoly : U))
+    ++ test function.
+
+  Impl ==> add
+    newtonpolygon : L -> List(Record(point : PO, slope : FZ, npoly : U))
+
+-- newtonpolygon takes a LinearOrdinaryDifferentialOperator1 as input
+-- and returns the coordinates of the extreme points of the Newton polygon,
+-- the slope of a point to the next point and the Newton polynomial of this
+-- slope.
+    newtonpolygon(f) ==
+        f1 : L3 := convertOp(f)$CodingTask2(F, UP, RF)
+        n := degree(f1)
+        var := new()$Symbol
+        cen : F := 0
+        uls := UnivariateLaurentSeries(F, var, cen)
+        tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
+        apf : LinearOrdinaryDifferentialOperator3(F, UP, uls) := 0
+        ftmp := f1
+        while ftmp ~= 0 repeat
+            lc := leadingCoefficient(ftmp)
+            den := UP2UTS(denom lc) :: uls
+            apf := (apf +
+                    monomial((UP2UTS(numer lc)$tools *
+                    recip(den) :: uls), degree(ftmp)))
+            ftmp := reductum ftmp
+        vals := [(if coefficient(apf, i) ~= 0 then order(coefficient(apf, i))
+                  else 0) for i in 0..n]
+        powd : Integer := 0
+        val_powd := vals.1
+        for i in 2..(#vals) repeat
+            val_powd := min(val_powd, vals.i)
+        npg : List PO := [[powd, val_powd]]
+        while powd < n repeat
+            m := (vals(powd+2) - val_powd) :: Fraction Integer
+            for j in 2..(n - powd) repeat
+                m := min(m, (vals(powd+j+1) - val_powd) / j)
+            i : Integer := n
+            while (vals(i+1)-val_powd) :: Fraction Integer ~= (i-powd)*m repeat
+                i := i - 1
+            powd := i
+            val_powd := vals(i+1)
+            npg := append(npg, [[i, vals(i+1)]])
+        res : List(Record(point : PO, slope : FZ, npoly : U)) := []
+        for i in 1..(#npg)-1 repeat
+            -- now we compute the Newton polynomial of slope number i
+            slop := (npg(i+1).y - npg(i).y) / (npg(i+1).x - npg(i).x)
+            npol : UP := 0
+            for j in 0..qcoerce((npg(i+1).x - npg(i).x) quo denom(slop)) repeat
+                ind : NonNegativeInteger := qcoerce(denom(slop) * j + npg(i).x)
+                opc := coefficient(apf, ind)
+                lsc := coefficient(opc, j * numer(slop) + npg(i).y)
+                npol := npol + monomial(lsc, j)
+            res := append(res, [[npg.i, slop, npol]])
+        append(res, [[npg(#npg), "failed", "failed"]])
+
+    testnp(f) ==
+        newtonpolygon(f)
+
+--Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
+--All rights reserved.
+--
+--Redistribution and use in source and binary forms, with or without
+--modification, are permitted provided that the following conditions are
+--met:
+--
+--    - Redistributions of source code must retain the above copyright
+--      notice, this list of conditions and the following disclaimer.
+--
+--    - Redistributions in binary form must reproduce the above copyright
+--      notice, this list of conditions and the following disclaimer in
+--      the documentation and/or other materials provided with the
+--      distribution.
+--
+--    - Neither the name of The Numerical ALgorithms Group Ltd. nor the
+--      names of its contributors may be used to endorse or promote products
+--      derived from this software without specific prior written permission.
+--
+--THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+--IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+--TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+--PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+--OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+--EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+--PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+--PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+--LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+--NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+--SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-- Compile order for the differential equation solver:
+-- oderf.spad  odealg.spad  nlode.spad  nlinsol.spad  riccati.spad
+-- kovacic.spad  lodof.spad  odeef.spad
