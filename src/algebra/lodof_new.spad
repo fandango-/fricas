@@ -18,12 +18,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
   US ==> UnivariateLaurentSeries(F, var, cen)
   LL ==> LinearOrdinaryDifferentialOperator3(F, UP, US)
   PO ==> Record(x : Integer, y : Integer)
-  FZ ==> Union(Fraction Integer, "failed")
-  U ==> Union(UP, "failed")
+  FZ ==> Fraction Integer
   FA ==> Record(factor : UP, exponent : Integer)
+  OR ==> Record(option : String, order : Integer)
 
   Exports ==> with
-    testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : U))
+    testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
     ++ test function.
     testfn : (LL, UP -> Factored(UP), String) -> List LL
     ++ test function.
@@ -32,9 +32,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
     import from IntegerRetractions(F)
 
     newtonpolygonPoints : LL -> List PO
-    newtonpolygon : LL -> List(Record(point : PO, slope : FZ, npoly : U))
+    newtonpolygon : LL -> List(Record(point : PO, slope : FZ, npoly : UP))
     factor_newton : (LL, UP -> Factored(UP), String) -> List LL
-    factor_newton2 : (LL, UP, Fraction Integer) -> List LL
+    factor_newton2 : (LL, UP, FZ) -> List LL
+--    op_with_slope : (Integer, FZ, FZ, OR) -> List LL
 
 -- newtonpolygonPoints takes a LinearOrdinaryDifferentialOperator3 having
 -- Laurent series coefficients as input and returns the coordinates of the
@@ -44,27 +45,27 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
         points : List PO := []
         yzero := order(leadingCoefficient(ftmp))
         while ftmp ~= 0 repeat
-            x := degree(ftmp)
-            y := order(leadingCoefficient(ftmp))
-            if x ~= 0 then
-                points := cons([x, y], points)
-            yzero := min(yzero, y)
+            xv := degree(ftmp)
+            yv := order(leadingCoefficient(ftmp))
+            if xv ~= 0 then
+                points := cons([xv, yv], points)
+            yzero := min(yzero, yv)
             ftmp := reductum ftmp
         points := cons([0, yzero], points)
-        npg : List PO := [points.1, points.2]
+        npg : List PO := [points.2, points.1]
         points3 := rest(rest(points))
         for i in points3 repeat
-            npg := append(npg, [i])
             ccw : Boolean := true
-            while #npg > 2 and ccw repeat
-                p1 := npg(#npg - 2)
-                p2 := npg(#npg - 1)
+            while #npg > 1 and ccw repeat
+                p1 := npg.2
+                p2 := npg.1
                 sb1 := (p2.x - p1.x) * (i.y - p1.y)
                 sb2 := (p2.y - p1.y) * (i.x - p1.x)
                 ccw := (sb1 - sb2) <= 0
                 if ccw then
-                    delete!(npg, #npg - 1)
-        npg
+                    npg := rest(npg)
+            npg := cons(i, npg)
+        reverse!(npg)
 
 --    newtonpolygonPoints(f) ==
 --        n := degree(f)
@@ -94,11 +95,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
 -- Newton polynomial of this slope.
     newtonpolygon(f) ==
         npg : List PO := newtonpolygonPoints(f)
-        res : List(Record(point : PO, slope : FZ, npoly : U)) := []
+        res : List(Record(point : PO, slope : FZ, npoly : UP)) := []
         restl := rest(npg)
         for i in npg for nxt in restl repeat
             -- now we compute the Newton polynomial of slope number i
-            slop : Fraction Integer := (nxt.y - i.y) / (nxt.x - i.x)
+            slop : FZ := (nxt.y - i.y) / (nxt.x - i.x)
             npol : UP := 0
             for j in 0..qcoerce((nxt.x - i.x) quo denom(slop)) repeat
                 ind : NonNegativeInteger := qcoerce(denom(slop) * j + i.x)
@@ -106,7 +107,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
                 lsc := coefficient(opc, j * numer(slop) + i.y)
                 npol := npol + monomial(lsc, j)
             res := append(res, [[i, slop, npol]])
-        append(res, [[npg(#npg), "failed", "failed"]])
+        res
 
     testnp(f) ==
         tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
@@ -178,7 +179,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
                 if option = "semireg" then
                     v := [[semi(i), 1] for i in v]
             -- now v contains the safe right factors of slope number k
-            slo := np(k).slope :: Fraction Integer
+            slo := np(k).slope :: FZ
             for i in v repeat
                 if degree(v(1).factor) * denom(slo) = degree(f) then
                     -- f allows no coprime index 1 factorization
@@ -204,13 +205,21 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
         ycd : Integer := np(l).point.y
         xcd : Integer := np(l).point.x
         npol := np(l).npoly :: UP
-        shift := min(0, ycd :: Fraction Integer + (degree(f) - xcd) * slop)
+        shift := min(0, ycd :: FZ + (degree(f) - xcd) * slop)
         -- we will compute the newton polynomial of the left factor
         npo : UP := monomial(1, qcoerce(xcd))
         mlr : UP := eval((npol quo r),monomial(1,1),monomial(1,qcoerce(denom(slop))))
         npo := npo * mlr
--- the list returned is obviously wrong. This part is TODO.
         [f, f]
+--        res := op_with_slope(degree(f) - degree(r, x) * denom(slope), slope,
+--                             shift, ["lift_newton", degree(r) * denom(slope)])
+--        res
+--
+--    op_with_slope(order, slope, shift, d) ==
+--        result : LL := D() ^ qcoerce(order)
+--        for i in 0..order-1 repeat
+--            str := new(qcoerce(ceiling((i - order) * 
+--            result := result + 
 
 --Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
 --All rights reserved.
