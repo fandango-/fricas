@@ -153,33 +153,31 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
                     semi(i) := i.factor ^ qcoerce(i.exponent)
                 for i in v for ii in 1..(#v)-1 repeat
                     restl := rest(v, ii)
+                    vif : UP := i.factor
+                    dvif := degree(vif)
                     for j in restl repeat
-                        vif : UP := i.factor
                         vjf : UP := j.factor
-                        if degree(vif) = degree(vjf) then
-                            d := qcoerce(degree(vif) - 1)
+                        if dvif = degree(vjf) then
+                            d := qcoerce(dvif - 1)
                             e : F := coefficient(vif, d) - coefficient(vjf, d)
-                            flagv : Boolean := integer?(e)
-                            if flagv and e ~= 0 then
+                            e := e / ((dvif :: Integer) :: F)
+                            if integer?(e) and e ~= 0 then
                                 ie := integer(e)
                                 id := d :: Integer
-                                flagv := false
-                                if ie rem (id + 1) = 0 then
-                                    quot := (ie quo (id + 1)) :: UP
-                                    newx : UP := monomial(1,1) + quot
-                                    sbt := eval(vjf, monomial(1,1), newx)
-                                    flagv := (vif - sbt) = 0
-                                if flagv then
-                                    if ie > 0 then
-                                        unsafe := union(unsafe, i)
-                                        n_unsafe(j) := (n_unsafe(j)+i.exponent)
-                                        semi(j) := (semi(j) * vif ^
-                                                    qcoerce(i.exponent))
-                                    else
-                                        unsafe := union(unsafe, j)
-                                        n_unsafe(i) := (n_unsafe(i)+j.exponent)
-                                        semi(i) := (semi(i) * vjf ^
-                                                    qcoerce(j.exponent))
+                                quot := (ie quo (id + 1)) :: UP
+                                newx : UP := monomial(1,1) + quot
+                                sbt := eval(vjf, monomial(1,1), newx)
+                                (vif - sbt) ~= 0 => "iterate"
+                                if ie > 0 then
+                                    unsafe := union(unsafe, i)
+                                    n_unsafe(j) := (n_unsafe(j)+i.exponent)
+                                    semi(j) := (semi(j) * vif ^
+                                                qcoerce(i.exponent))
+                                else
+                                    unsafe := union(unsafe, j)
+                                    n_unsafe(i) := (n_unsafe(i)+j.exponent)
+                                    semi(i) := (semi(i) * vjf ^
+                                                qcoerce(j.exponent))
                 v := members(difference(set(v), unsafe))
                 if option = "semireg" then
                     v := [[semi(i), 1] for i in v]
