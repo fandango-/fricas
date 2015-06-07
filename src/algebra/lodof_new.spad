@@ -21,6 +21,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
   FZ ==> Fraction Integer
   FA ==> Record(factor : UP, exponent : Integer)
   F2 ==> Record(Qt : LL, Rt : LL)
+  NL ==> Record(factors : F2, r_l : LL)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -41,6 +42,13 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
     factor_newton : (LL, UP -> Factored(UP), String) -> List LL
     factor_newton2 : (LL, UP, FZ) -> F2
     op_with_slope : (Integer, FZ, FZ, UP) -> LL
+    lift_newton : (US, FZ, LL, UP, UP, FZ, F2, LL, Integer) -> NL
+    coefs_operator : (LL, FZ, Integer) -> UP
+    coefs_operator1 : (UP, FZ, Integer) -> LL
+    coeffx : (LL, FZ) -> UP
+    plug_delta : UP -> LL
+    nm_mult : (LL, LL, Integer, Integer) -> LL
+    nm_block : (LL, FZ, FZ, FZ, FZ -> Integer) -> LL
 
     convertL3toLL(f) ==
         tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
@@ -215,9 +223,25 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
         mlr : UP := eval((npol quo r),monomial(1,1),monomial(1,qcoerce(denom(slop))))
         npo := npo * mlr
         npo2 : UP := eval(r, monomial(1, 1), monomial(1, qcoerce(denom(slop))))
-        res1 := op_with_slope(degree(f) - degree(r) * denom(slop), slop,
-                              shift, npo)
-        res2 := op_with_slope(degree(r) * denom(slop), slop, 0, npo2)
+        ord1 := degree(f) - degree(r) * denom(slop)
+        ord2 := degree(r) * denom(slop)
+        res1 := op_with_slope(ord1, slop, shift, npo)
+        res2 := op_with_slope(ord2, slop, 0, npo2)
+        rem_lift : LL := 0
+        for i in 0..ord1-1 repeat
+            r1c := coefficient(res1, i)
+            lnr := lift_newton(r1c, slop, f, npo, npo2, shift, [res1, res2],
+                               rem_lift, degree(r1c)+1)
+            res1 := lnr.factors.Qt
+            res2 := lnr.factors.Rt
+            rem_lift := lnr.r_l
+        for i in 0..ord2-1 repeat
+            r2c := coefficient(res2, i)
+            lnr := lift_newton(r2c, slop, f, npo, npo2, shift, [res1, res2],
+                               rem_lift, degree(r2c)+1)
+            res1 := lnr.factors.Qt
+            res2 := lnr.factors.Rt
+            rem_lift := lnr.r_l
         [res1, res2]
 
     testf2(f, r, slop) ==
@@ -232,6 +256,206 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
 
     testos(order, slop, shift, npo) ==
         op_with_slope(order, slop, shift, npo)
+
+    lift_newton(llaur, slop, ff, l_low, r_low, shift, v, rem_lift, acc) ==
+        n_lifts := (acc - degree(llaur)) :: FZ
+        if n_lifts <= 0 then
+            return [v, rem_lift]
+        left := v.Qt
+        right := v.Rt
+        n_known := (degree(coefficient(right, 0)) :: FZ +
+                    (degree(right) * slop))
+        f : LL := nm_block(ff, n_known+shift, n_known+n_lifts+shift, slop, ceiling)
+        l := left
+        if n_known + shift <= 0 then
+            l := l - monomial(1, degree(l))
+        r : LL
+        if n_known = 0 then
+            r := 0
+        else
+            r := right
+        a1 := ceiling(n_known + shift - slop * (degree(ff) :: Integer))
+        a2 := ceiling(n_known + shift + n_lifts) - 1
+        arg1 := a2 + 1 - retract(n_lifts)@Integer
+        lr : LL := rem_lift - f + nm_mult(l, r, arg1, a2)
+        n_k := retract(n_known)@Integer
+        n_l := retract(n_lifts)@Integer
+        if slop = 0 then
+            -- regular singular case
+            for i in n_k..n_k+n_l-1 repeat
+                r_extra : LL
+                l_extra : LL
+                if i = 0 then
+                    r_extra := plug_delta(r_low)
+                    l_extra := (plug_delta(l_low) * monomial(1,
+                                                    retract(shift)@Integer)$US)
+                else
+                    ltmp := l_low
+                    sl_low : UP := 0
+                    while ltmp ~= 0 repeat
+                        lc := leadingCoefficient(ltmp)
+                        dg := degree(ltmp)
+                        sl_low := sl_low + (monomial(1, 1) + i :: UP) ^ dg
+                        ltmp := reductum ltmp
+                    s := extendedEuclidean(r_low, sl_low)
+                    if s.generator ~= 1 then
+                        error "unsafe factor"
+                    c1 := s.coef1
+                    c2 := s.coef2
+                    clr := coeffx(lr, i :: FZ + shift)
+                    r_extra1 := -((c2 * clr) rem r_low)
+                    r_extra := plug_delta(r_extra1)
+                    l_extra1 := (clr + r_extra1 * l_low) quo r_low
+                    l_extra := plug_delta(l_extra1)
+                    l_extra := -(monomial(1, i + retract(shift)@Integer)$US *
+                                 l_extra)
+                    r_extra := monomial(1, i)$US * r_extra
+                l := l + l_extra
+                lr := lr + nm_mult(l, r_extra, a1, a2) + nm_mult(l_extra, r, a1, a2)
+                r := r + r_extra
+        else
+            s := extendedEuclidean(r_low, l_low, 1) :: Record(coef1 : UP, coef2 : UP)
+            c1 := s.coef1
+            c2 := s.coef2
+            le : Integer := denom(slop) * retract(shift)@Integer
+            le := le - numer(slop) * degree(left)
+            re : Integer := -(numer(slop) * degree(right))
+            fe : Integer := denom(slop) * retract(shift)@Integer
+            fe := fe - numer(slop) * degree(ff)
+            for i in n_k*denom(slop)..(n_k+n_l)*denom(slop)-1 repeat
+                r_extra : LL
+                l_extra : LL
+                if i = 0 then
+                    r_extra := coefs_operator1(r_low, slop, re)
+                    l_extra := coefs_operator1(l_low, slop, le)
+                else
+                    r_extra1 := (c2 * coefs_operator(lr, slop, i+fe)) rem r_low
+                    l_extra1 := coefs_operator(lr, slop, i+fe) - r_extra1*l_low
+                    l_extra1 := -(l_extra1 quo r_low)
+                    l_extra := coefs_operator1(l_extra1, slop, i + le)
+                    r_extra := coefs_operator1(-(r_extra1), slop, i + re)
+                l := l + l_extra
+                lr := lr + nm_mult(l, r_extra, a1, a2) + nm_mult(l_extra, r, a1, a2)
+                r := r + r_extra
+        [[l, r], lr]
+
+    coefs_operator(f, slop, i) ==
+        start_D := (-i quo numer(slop)) rem denom(slop)
+        start_x := start_D * slop + i /$FZ denom(slop)
+        res : UP := 0
+        for j in 0..floor(degree(f) /$FZ denom(slop)) repeat
+            fc := coeffx(f, start_x + numer(slop) * j :: FZ)
+            npc := coefficient(fc, qcoerce(start_D + j * denom(slop)))
+            res := res + monomial(npc, qcoerce(start_D + j * denom(slop)))
+        res
+
+    coefs_operator1(np, slop, i) ==
+        start_D := (-i quo numer(slop)) rem denom(slop)
+        start_x := retract(start_D * slop + i /$FZ denom(slop))@Integer
+        res : LL := 0
+        for j in 0..ceiling(degree(np) /$FZ denom(slop)) repeat
+            npc := coefficient(np, qcoerce(start_D + j * denom(slop)))
+            sc := monomial(npc, start_x + numer(slop) * j)
+            res := res + monomial(sc, qcoerce(start_D + j * denom(slop)))
+        res
+
+    coeffx(f, e) ==
+        ftmp := f
+        ex := retract(e)@Integer
+        res : UP := 0
+        while ftmp ~= 0 repeat
+            lc := leadingCoefficient(ftmp)
+            dg := degree(ftmp)
+            while lc ~= 0 repeat
+                slc := leadingCoefficient(lc)
+                sdg := degree(lc)
+                if sdg = ex then
+                    res := res + monomial(slc, dg)
+                lc := reductum lc
+            ftmp := reductum ftmp
+        res
+
+    plug_delta(np) ==
+        f : LL := 0
+        nptmp := np
+        while nptmp ~= 0 repeat
+            lc := leadingCoefficient(nptmp)
+            dg := degree(nptmp)
+            f := f + monomial(lc :: US, dg)
+            nptmp := reductum nptmp
+        f
+
+    nm_mult(l, r, low, high) ==
+        ldl := degree(leadingCoefficient(l))
+        dl := ldl
+        ldr := degree(leadingCoefficient(r))
+        dr := ldr
+        cl : Table(Integer, LL) := table()
+        cr : Table(Integer, LL) := table()
+        ltmp := l
+        while ltmp ~= 0 repeat
+            lc := leadingCoefficient(ltmp)
+            dg := degree(ltmp)
+            while lc ~= 0 repeat
+                slc := leadingCoefficient(lc)
+                sdg := degree(lc)
+                if key?(sdg, cl) then
+                    cl.sdg := cl.sdg + monomial(slc :: US, dg)
+                else
+                    cl.sdg := monomial(slc :: US, dg)
+                ldl := min(ldl, sdg)
+                dl := max(dl, sdg)
+                lc := reductum lc
+            ltmp := reductum ltmp
+        rtmp := r
+        while rtmp ~= 0 repeat
+            lc := leadingCoefficient(rtmp)
+            dg := degree(rtmp)
+            while lc ~= 0 repeat
+                slc := leadingCoefficient(lc)
+                sdg := degree(lc)
+                if key?(sdg, cr) then
+                    cr.sdg := cr.sdg + monomial(slc :: US, dg)
+                else
+                    cr.sdg := monomial(slc :: US, dg)
+                ldr := min(ldr, sdg)
+                dr := max(dr, sdg)
+                lc := reductum lc
+            rtmp := reductum rtmp
+        res : LL := 0
+        for j in max(ldr, low - dl)..min(high - ldl, dr) repeat
+            res1 : LL := 0
+            if key?(j, cr) then
+                res1 := cr.j * monomial(1, j)$US
+            res2 : LL := 0
+            for i in max(ldl, low - j)..min(dl, high - j) repeat
+                cli : LL := 0
+                if key?(i, cl) then
+                    cli := cl.i
+                scli : LL := 0
+                while cli ~= 0 repeat
+                    lc := leadingCoefficient(cli)
+                    dg := degree(cli)
+                    ad := j :: LL
+                    scli := scli + leadingCoefficient(cli) *
+                                   (monomial(1, 1) + ad) ^ degree(cli)
+                res2 := res2 + scli * monomial(1, i)$US
+            res := res + res1 * res2
+        res
+
+    nm_block(f, n, m, slop, round_off) ==
+        res : LL
+        if (round_off(n) <= 0) and (0 < round_off(m)) then
+            res := monomial(1, degree(f))
+        else
+            res := 0
+        df := degree(f) :: Integer
+        for i in df-1..0 by -1 repeat
+            res := res + monomial(truncate(coefficient(f, qcoerce(i)),
+                                           round_off(m + slop * (i - df)),
+                                           round_off(n + slop * (i - df))),
+                                           qcoerce(i))
+        res
 
 --Copyright (c) 1991-2002, The Numerical ALgorithms Group Ltd.
 --All rights reserved.
