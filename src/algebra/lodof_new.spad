@@ -303,7 +303,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
         lnr
 
     coefs_poly(f, slop, i) ==
-        start_D := (-i quo numer(slop)) rem denom(slop)
+        nsi := extendedEuclidean(numer(slop), denom(slop)).coef1
+        start_D := positiveRemainder(-i * nsi, denom(slop))
         start_x := start_D * slop + i /$FZ denom(slop)
         res : UP := 0
         for j in 0..floor(degree(f) /$FZ denom(slop)) repeat
@@ -316,7 +317,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(F, UP, var, cen) : Exports == Im
         coefs_operator(coefs_poly(convertL3toLL(f), slop, i), slop, i)
 
     coefs_operator(np, slop, i) ==
-        start_D := (-i quo numer(slop)) rem denom(slop)
+        nsi := extendedEuclidean(numer(slop), denom(slop)).coef1
+        start_D := positiveRemainder(-i * nsi, denom(slop))
         start_x := retract(start_D * slop + i /$FZ denom(slop))@Integer
         res : LL := 0
         for j in 0..ceiling(degree(np) /$FZ denom(slop)) repeat
