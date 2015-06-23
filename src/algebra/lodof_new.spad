@@ -57,6 +57,14 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ++ test function.
     testfr : (L3, SUP -> Factored(SUP), String) -> RS
     ++ test function.
+    testsb : (Union(UP, US), L3) -> LL
+    ++ test function.
+    testro : (L3, F, PositiveInteger) -> Boolean
+    ++ test function.
+    testir : (L3, F, PositiveInteger) -> LL
+    ++ test function.
+    testfo : (L3, SUP -> Factored(SUP), String) -> RS
+    ++ test function.
 
   Impl ==> add
     import from IntegerRetractions(F)
@@ -659,6 +667,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             ftmp := reductum ftmp
         res
 
+    testsb(a, f) ==
+        substitute(a, convertL3toLL(f))
+
     ramification_of(f, coefr, n) ==
         if coefr = 1 and n = 1 then
             return f
@@ -674,6 +685,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             ftmp := reductum ftmp
         n ^ degree(f) * res
 
+    testro(f, coefr, n) ==
+        ror := ramification_of(convertL3toLL(f), coefr, n)
+        iram_of(ror, coefr, n) = convertL3toLL(f)
+
     iram_of(f, coefr, n) ==
         if coefr = 1 and n = 1 then
             return f
@@ -683,7 +698,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             lc := leadingCoefficient(ftmp)
             dg := degree(ftmp)
             tlc := terms(lc)
-            map!((x : TERM) : TERM +-> (
+            tlc := map((x : TERM) : TERM +-> (
             ndeg := x.k quo n;
             ncoef := x.c / (coefr ^ ndeg);
             [ndeg, ncoef]), tlc)
@@ -691,7 +706,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             extra := monomial(mlc, dg) * (n ^ dg) :: US
             res := res + extra
             ftmp := reductum ftmp
-        res * ((1 /$FZ n) ^ dg) :: F :: US
+        res * ((1 /$FZ n) ^ degree(f)) :: F :: US
+
+    testir(f, coefr, n) ==
+        iram_of(convertL3toLL(f), coefr, n)
 
     factor_op(f, factorizer, option) ==
         fnr := factor_newton(f, factorizer, option)
@@ -706,6 +724,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 res := append(res,
                               factor_riccati(i, factorizer, option) :: List LL)
         res
+
+    testfo(f, factorizer, option) ==
+        factor_op(convertL3toLL(f), factorizer, option)
 
 --Copyright (c) 2015, Abhinav Baid.
 --All rights reserved.
