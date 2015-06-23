@@ -718,12 +718,13 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             for i in fnr repeat
                 res := append(res,
                               factor_riccati(i, factorizer, option) :: SP)
+            return res
         else
             res : List LL := []
             for i in fnr repeat
                 res := append(res,
                               factor_riccati(i, factorizer, option) :: List LL)
-        res
+            return res
 
     testfo(f, factorizer, option) ==
         factor_op(convertL3toLL(f), factorizer, option)
