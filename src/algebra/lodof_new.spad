@@ -30,7 +30,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   LC ==> Record(llc : List Stream TERM, rlc : List Stream TERM)
   LAU ==> Record(laurl : List US, laurr : List US)
   SP ==> List(Record(op : LL, ram : UP, expart : US))
-  RS ==> Union(List LL, SP)
+  RS ==> List Union(LL, Record(ope : LL, dext : PositiveInteger, rami : UP))
+  FRI ==> Union(SP, RS)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -55,15 +56,13 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ++ test function.
     testpd : UP -> LL
     ++ test function.
-    testfr : (L3, SUP -> Factored(SUP), String) -> RS
+    testfr : (L3, SUP -> Factored(SUP), String) -> FRI
     ++ test function.
     testsb : (Union(UP, US), L3) -> LL
     ++ test function.
-    testro : (L3, F, PositiveInteger) -> Boolean
+    testro : (L3, F, PositiveInteger) -> LL
     ++ test function.
-    testir : (L3, F, PositiveInteger) -> LL
-    ++ test function.
-    testfo : (L3, SUP -> Factored(SUP), String) -> RS
+    testfo : (L3, SUP -> Factored(SUP), String) -> FRI
     ++ test function.
 
   Impl ==> add
@@ -90,11 +89,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     coefs_operator : (UP, FZ, Integer) -> LL
     coeffx : (LL, FZ) -> UP
     plug_delta : UP -> LL
-    factor_riccati : (LL, SUP -> Factored(SUP), String) -> RS
-    substitute : (Union(UP, US), LL) -> LL
+    factor_riccati : (LL, SUP -> Factored(SUP), String) -> FRI
+    substitute : (Union(UP, US), Union(LL, Record(ope : LL,
+                  dext : PositiveInteger, rami : UP))) -> Union(LL,
+                  Record(ope : LL, dext : PositiveInteger, rami : UP))
     ramification_of : (LL, F, PositiveInteger) -> LL
-    iram_of : (LL, F, PositiveInteger) -> LL
-    factor_op : (LL, SUP -> Factored(SUP), String) -> RS
+    factor_op : (LL, SUP -> Factored(SUP), String) -> FRI
 
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
@@ -559,13 +559,18 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         np1 := np.1
         slop := np1.slope
         if option = "semireg" and slop = 0 then
-            v := value(factor_op(f, factorizer, "alg factor") :: List LL)
+            va := value(factor_op(f, factorizer, "alg factor") :: RS)
+            if va case LL then
+                vr : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                vr := [va, 1, monomial(1, 1)]
+            else
+                vr := va :: Record(ope : LL, dext : PositiveInteger, rami : UP)
             xx : UP := monomial(1, 1)
-            i : UP := xx - coeffx(v, 0)
-            n : Integer := degree(f)
+            i : UP := xx - coeffx(vr.ope, 0)
+            n : Integer := degree(f) quo vr.dext
             if n = 1 then
                 il := convertUPtoUTS(i) :: US
-                return [[v + il :: LL, xx, il]]
+                return [[vr.ope + il :: LL, vr.rami, il]]
             npf := factors(factorUP(eval(np1.npoly, monomial(1, 1),
                                            monomial(1, 1) + i), factorizer))
             r : UP := 1
@@ -582,51 +587,63 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 error "bug"
             n := reduce(min, sols)
             r := eval(r, monomial(1, 1), monomial(1, 1) + n :: UP)
-            subs := substitute(i + n :: UP, f)
+            subs := substitute(i + n :: UP, f) :: LL
             np := newtonpolygon(subs)
             lns : Record(point : PO, slope : FZ, npoly : UP)
             for ip in np repeat
                 if ip.slope = 0 then
                     lns := ip
             f2r := factor_newton2(subs, r, lns).Rt
-            return [[f2r, xx, convertUPtoUTS(i + n :: UP) :: US]]
+            return [[f2r, vr.rami, convertUPtoUTS(i + n :: UP) :: US]]
         npf := factors(factorUP(np1.npoly, factorizer)).1
         if (degree(f) <= 1 or (npf.exponent = 1 and
            (option = "split over k((x))" or option = "all right factors"))) then
             if option = "semireg" then
                 -- degree(f) = 1 and slope ~= 0
-                il : US := truncate(coefficient(f, 0), 0)
+                il : US := -truncate(coefficient(f, 0), 0)
                 return [[f + il :: LL, monomial(1, 1), il]]
             else
                 -- f is irreducible
                 return [f]
         else if degree(npf.factor) = 1 and denom(slop) = 1 then
             -- now slope ~= 0
-            cxs : US := coefficient(npf.factor, 0) * monomial(1, -numer(slop))
+            cxs : US := -coefficient(npf.factor, 0) * monomial(1, -numer(slop))
             -- apply a homomorphism xD -> xD + cxs to simplify the problem.
-            v := factor_op(substitute(cxs, f), factorizer, option)
+            v : FRI := factor_op(substitute(cxs, f) :: LL, factorizer, option)
             if option = "semireg" then
                 vsp := v :: SP
                 sym : Symbol := variable(cxs)
                 retv : SP := []
                 for vi in vsp repeat
                     xsubsr := (convertUPtoUTS(vi.ram) :: US) ^ (-numer(slop))
-                    fullxr := degree(vi.ram)*coefficient(npf.factor, 0)*xsubsr
+                    fullxr := degree(vi.ram)*(-coefficient(npf.factor, 0))*xsubsr
                     retv := append(retv, [[vi.op, vi.ram, vi.expart + fullxr]])
                 return retv
-            vrs := v :: List LL
-            return [substitute(-cxs, i) for i in vrs] :: List LL
+            vrs := v :: RS
+            return [substitute(-cxs, i) for i in vrs] :: RS
         else if degree(npf.factor) > 1 then
             -- now we need an algebraic extension on k
             gr : F := zeroOf(makeSUP(npf.factor))
             npgr : UP := (monomial(1, 1) - gr :: UP) ^ qcoerce(npf.exponent)
-            f2r := factor_newton2(f, npgr, np1)
-            res := factor_riccati(f2r.Rt, factorizer, option)
-            return res
+            f2r := factor_newton2(f, npgr, np1).Rt
+            v : FRI := factor_riccati(f2r, factorizer, option)
+            if v case SP then
+                return v
+            else
+                vrs := v :: RS
+                res : RS := []
+                for i in vrs repeat
+                    if i case LL then
+                        nt : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                        nt := [i, qcoerce(degree(npf.factor)), monomial(1, 1)]
+                        res := append(res, [nt])
+                    else
+                        res := append(res, [i])
+                return res
         else
             -- now we need a ramification
             n := extendedEuclidean(numer(slop), denom(slop)).coef1
-            coefr := coefficient(npf.factor, 0)
+            coefr := -coefficient(npf.factor, 0)
             ror : LL := ramification_of(f, coefr ^ n, qcoerce(denom(slop)))
             exp := retract((1 - n * numer(slop)) /$FZ denom(slop))@Integer
             tosub : F := denom(slop) * coefr ^ exp
@@ -636,18 +653,27 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             for i in np repeat
                 if i.slope = (numer(slop) :: FZ) then
                     lns := i
-            f2r := factor_newton2(ror, r, lns)
-            v := factor_riccati(f2r.Rt, factorizer, option)
-            res : RS
+            f2r := factor_newton2(ror, r, lns).Rt
+            v : FRI := factor_riccati(f2r, factorizer, option)
+            r := monomial(coefr ^ n, qcoerce(denom(slop)))
             if v case SP then
                 vsp := v :: SP
                 res := [[i.op, eval(r, monomial(1, 1), i.ram), i.expart]
                         for i in vsp] :: SP
+                return res
             else
-                vrs := v :: List LL
-                res := [iram_of(i, coefr ^ n, qcoerce(denom(slop)))
-                        for i in vrs] :: List LL
-            return res
+                vrs := v :: RS
+                res : RS := []
+                for i in vrs repeat
+                    nt : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                    if i case LL then
+                        nt := [i, 1, r]
+                    else
+                        ir := i :: Record(ope : LL, dext : PositiveInteger,
+                                          rami : UP)
+                        nt := [ir.ope, ir.dext, eval(r, monomial(1,1), ir.rami)]
+                    res := append(res, [nt])
+                return res
 
     testfr(f, factorizer, option) ==
         factor_riccati(convertL3toLL(f), factorizer, option)
@@ -658,17 +684,27 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             new_mon := new_mon + convertL3toLL(a :: UP :: RF :: L3)
         else
             new_mon := new_mon + a :: US :: LL
-        ftmp := f
+        if f case LL then
+            ftmp := f :: LL
+        else
+            fr := f :: Record(ope : LL, dext : PositiveInteger, rami : UP)
+            ftmp := fr.ope
+            new_mon := ramification_of(new_mon, leadingCoefficient(fr.rami),
+                                       qcoerce(degree(fr.rami)))
         res : LL := 0
         while ftmp ~= 0 repeat
             lc := leadingCoefficient(ftmp)
             dg := degree(ftmp)
             res := res + lc * new_mon ^ dg
             ftmp := reductum ftmp
-        res
+        if f case LL then
+            return res
+        else
+            fr := f :: Record(ope : LL, dext : PositiveInteger, rami : UP)
+            return [res, fr.dext, fr.rami]
 
     testsb(a, f) ==
-        substitute(a, convertL3toLL(f))
+        substitute(a, convertL3toLL(f)) :: LL
 
     ramification_of(f, coefr, n) ==
         if coefr = 1 and n = 1 then
@@ -686,30 +722,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         n ^ degree(f) * res
 
     testro(f, coefr, n) ==
-        ror := ramification_of(convertL3toLL(f), coefr, n)
-        iram_of(ror, coefr, n) = convertL3toLL(f)
-
-    iram_of(f, coefr, n) ==
-        if coefr = 1 and n = 1 then
-            return f
-        res : LL := 0
-        ftmp : LL := f
-        while ftmp ~= 0 repeat
-            lc := leadingCoefficient(ftmp)
-            dg := degree(ftmp)
-            tlc := terms(lc)
-            tlc := map((x : TERM) : TERM +-> (
-            ndeg := x.k quo n;
-            ncoef := x.c / (coefr ^ ndeg);
-            [ndeg, ncoef]), tlc)
-            mlc := series(tlc)
-            extra := monomial(mlc, dg) * (n ^ dg) :: US
-            res := res + extra
-            ftmp := reductum ftmp
-        res * ((1 /$FZ n) ^ degree(f)) :: F :: US
-
-    testir(f, coefr, n) ==
-        iram_of(convertL3toLL(f), coefr, n)
+        ramification_of(convertL3toLL(f), coefr, n)
 
     factor_op(f, factorizer, option) ==
         fnr := factor_newton(f, factorizer, option)
@@ -720,10 +733,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                               factor_riccati(i, factorizer, option) :: SP)
             return res
         else
-            res : List LL := []
+            res : RS := []
             for i in fnr repeat
                 res := append(res,
-                              factor_riccati(i, factorizer, option) :: List LL)
+                              factor_riccati(i, factorizer, option) :: RS)
             return res
 
     testfo(f, factorizer, option) ==
