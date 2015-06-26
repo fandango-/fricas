@@ -30,7 +30,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   LC ==> Record(llc : List Stream TERM, rlc : List Stream TERM)
   LAU ==> Record(laurl : List US, laurr : List US)
   SP ==> List(Record(op : LL, ram : UP, expart : US))
-  RS ==> List Union(LL, Record(ope : LL, dext : PositiveInteger, rami : UP))
+  LA ==> Record(ope : LL, dext : PositiveInteger, rami : UP)
+  RS ==> List Union(LL, LA)
   FRI ==> Union(SP, RS)
 
   Exports ==> with
@@ -90,11 +91,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     coeffx : (LL, FZ) -> UP
     plug_delta : UP -> LL
     factor_riccati : (LL, SUP -> Factored(SUP), String) -> FRI
-    substitute : (Union(UP, US), Union(LL, Record(ope : LL,
-                  dext : PositiveInteger, rami : UP))) -> Union(LL,
-                  Record(ope : LL, dext : PositiveInteger, rami : UP))
+    substitute : (Union(UP, US), Union(LL, LA)) -> Union(LL, LA)
     ramification_of : (LL, F, PositiveInteger) -> LL
     factor_op : (LL, SUP -> Factored(SUP), String) -> FRI
+    make_rightfactor : (LL, LA) -> LL
 
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
@@ -561,10 +561,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         if option = "semireg" and slop = 0 then
             va := value(factor_op(f, factorizer, "alg factor") :: RS)
             if va case LL then
-                vr : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                vr : LA
                 vr := [va, 1, monomial(1, 1)]
             else
-                vr := va :: Record(ope : LL, dext : PositiveInteger, rami : UP)
+                vr := va :: LA
             xx : UP := monomial(1, 1)
             i : UP := xx - coeffx(vr.ope, 0)
             n : Integer := degree(f) quo vr.dext
@@ -621,6 +621,26 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 return retv
             vrs := v :: RS
             return [substitute(-cxs, i) for i in vrs] :: RS
+        else if option = "split over k((x))" then
+            -- an order 1 factor over the alg. closure of k((x))
+            ric := factor_riccati(f, factorizer, "alg factor") :: RS
+            r1 := value(ric) :: LA
+            -- a righthand factor over k((x))
+            rk := make_rightfactor(f, r1)
+            if rk = f then
+                return [f]
+            lk := rightQuotient(f, rk)
+            return append(factor_riccati(lk, factorizer, option) :: RS, [rk])
+        else if option = "all right factors" then
+            ric := factor_riccati(f, factorizer, "all alg factors") :: RS
+            res : RS := []
+            for i in ric repeat
+                rk := make_rightfactor(f, i :: LA)
+                if rk = f then
+                    res := [f]
+                else
+                    res := append(res, [rk])
+            return res
         else if degree(npf.factor) > 1 then
             -- now we need an algebraic extension on k
             gr : F := zeroOf(makeSUP(npf.factor))
@@ -634,7 +654,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 res : RS := []
                 for i in vrs repeat
                     if i case LL then
-                        nt : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                        nt : LA
                         nt := [i, qcoerce(degree(npf.factor)), monomial(1, 1)]
                         res := append(res, [nt])
                     else
@@ -665,12 +685,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 vrs := v :: RS
                 res : RS := []
                 for i in vrs repeat
-                    nt : Record(ope : LL, dext : PositiveInteger, rami : UP)
+                    nt : LA
                     if i case LL then
                         nt := [i, 1, r]
                     else
-                        ir := i :: Record(ope : LL, dext : PositiveInteger,
-                                          rami : UP)
+                        ir := i :: LA
                         nt := [ir.ope, ir.dext, eval(r, monomial(1,1), ir.rami)]
                     res := append(res, [nt])
                 return res
@@ -687,7 +706,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         if f case LL then
             ftmp := f :: LL
         else
-            fr := f :: Record(ope : LL, dext : PositiveInteger, rami : UP)
+            fr := f :: LA
             ftmp := fr.ope
             new_mon := ramification_of(new_mon, leadingCoefficient(fr.rami),
                                        qcoerce(degree(fr.rami)))
@@ -700,7 +719,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         if f case LL then
             return res
         else
-            fr := f :: Record(ope : LL, dext : PositiveInteger, rami : UP)
+            fr := f :: LA
             return [res, fr.dext, fr.rami]
 
     testsb(a, f) ==
@@ -741,6 +760,21 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
 
     testfo(f, factorizer, option) ==
         factor_op(convertL3toLL(f), factorizer, option)
+
+    make_rightfactor(f, ric) ==
+        d := degree(ric.rami)
+        v := (-order(coefficient(ric.ope, 0), 0)) /$FZ d
+        -- now we multiply by the degree of the algebraic extension
+        d := d * ric.dext
+        if d = degree(f) then
+            return f
+        -- dummy return value; see below explanation
+        f
+        -- now, f has an irreducible right-hand factor R in k((x))[xD] of order
+        -- d, slope v, with corresponding right-hand factor in alg. closure of
+        -- k((x))[xD] being ric. So, we need to get R using
+        -- lift_rightfactor(d, v, ric, ...) where I'm not sure about the extra
+        -- arguments needed.
 
 --Copyright (c) 2015, Abhinav Baid.
 --All rights reserved.
