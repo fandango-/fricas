@@ -30,7 +30,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   LC ==> Record(llc : List Stream TERM, rlc : List Stream TERM)
   LAU ==> Record(laurl : List US, laurr : List US)
   SP ==> List(Record(op : LL, ram : UP, expart : US))
-  LA ==> Record(ope : LL, dext : PositiveInteger, rami : UP)
+  LA ==> Record(ope : LL, dext : PositiveInteger, alpha : F, rami : UP)
   RS ==> List Union(LL, LA)
   FRI ==> Union(SP, RS)
 
@@ -95,6 +95,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ramification_of : (LL, F, PositiveInteger) -> LL
     factor_op : (LL, SUP -> Factored(SUP), String) -> FRI
     make_rightfactor : (LL, LA) -> LL
+    lift_rightfactor : (PositiveInteger, LA) -> LL
 
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
@@ -562,7 +563,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             va := value(factor_op(f, factorizer, "alg factor") :: RS)
             if va case LL then
                 vr : LA
-                vr := [va, 1, monomial(1, 1)]
+                vr := [va, 1, 0, monomial(1, 1)]
             else
                 vr := va :: LA
             xx : UP := monomial(1, 1)
@@ -655,7 +656,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 for i in vrs repeat
                     if i case LL then
                         nt : LA
-                        nt := [i, qcoerce(degree(npf.factor)), monomial(1, 1)]
+                        nt := [i, qcoerce(degree(npf.factor)), gr, monomial(1, 1)]
                         res := append(res, [nt])
                     else
                         res := append(res, [i])
@@ -687,10 +688,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 for i in vrs repeat
                     nt : LA
                     if i case LL then
-                        nt := [i, 1, r]
+                        nt := [i, 1, 0, r]
                     else
                         ir := i :: LA
-                        nt := [ir.ope, ir.dext, eval(r, monomial(1,1), ir.rami)]
+                        nt := [ir.ope, ir.dext, ir.alpha, eval(r, monomial(1,1), ir.rami)]
                     res := append(res, [nt])
                 return res
 
@@ -720,7 +721,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             return res
         else
             fr := f :: LA
-            return [res, fr.dext, fr.rami]
+            return [res, fr.dext, fr.alpha, fr.rami]
 
     testsb(a, f) ==
         substitute(a, convertL3toLL(f)) :: LL
@@ -762,19 +763,75 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         factor_op(convertL3toLL(f), factorizer, option)
 
     make_rightfactor(f, ric) ==
-        d := degree(ric.rami)
-        v := (-order(coefficient(ric.ope, 0), 0)) /$FZ d
+        d : PositiveInteger := qcoerce(degree(ric.rami))
         -- now we multiply by the degree of the algebraic extension
         d := d * ric.dext
         if d = degree(f) then
             return f
-        -- dummy return value; see below explanation
-        f
         -- now, f has an irreducible right-hand factor R in k((x))[xD] of order
-        -- d, slope v, with corresponding right-hand factor in alg. closure of
-        -- k((x))[xD] being ric. So, we need to get R using
-        -- lift_rightfactor(d, v, ric, ...) where I'm not sure about the extra
-        -- arguments needed.
+        -- d, with corresponding right-hand factor in alg. closure of k((x))[xD]
+        -- being ric. So, we need to get R using lift_rightfactor(d, ric).
+        lift_rightfactor(d, ric)
+
+    lift_rightfactor(order, ric) ==
+        cric := leadingCoefficient(ric.rami)
+        ram := degree(ric.rami)
+        r := -coefficient(ric.ope, 0)
+        rp : US := 1
+        s : Vector US := new(order + 1, 0)
+        s.1 := 1
+        mindg : Integer := 0
+        for i in 1..order repeat
+            rp := (apply(D()$LL, 0, rp) + r * rp) / ram :: F
+            s.(i+1) := rp
+            mindg := min(mindg, order(rp, 0))
+        map!((x : US) : US +-> x / monomial(1, mindg), s)
+        sysram : List Vector US := [new(order+1, 0) for i in 1..ram]
+        nn : Stream NonNegativeInteger
+        nn := stream((x : NonNegativeInteger) : NonNegativeInteger +-> x+1, 0)
+        for i in 1..ram repeat
+            for j in 1..order+1 repeat
+                ser : US := s.j
+                cst := map((x : NonNegativeInteger) : TERM +-> (
+                            dg := i - 1 + x * ram;
+                            [x, coefficient(ser, dg) / (cric ^ x)]),
+                           nn)$StreamFunctions2(NonNegativeInteger, TERM)
+                sysram(i)(j) := series(cst)
+        system : List Vector US := [new(order+1, 0) for i in 1..order]
+        pa : Vector F := [ric.alpha ^ i for i in 0..ric.dext-1]
+        for i in 1..ram repeat
+            for j in 1..order+1 repeat
+                ser : US := sysram(i)(j)
+                for k in 1..ric.dext repeat
+                    nsr := map((x : F) : F +-> (
+                                psq := particularSolutionOverQ(pa,
+                                                 x)$IntegerLinearDependence(F);
+                                psq = "failed" => x;
+                                (psq :: Vector FZ).k :: F), ser)
+                    system((i - 1) * ric.dext + k)(j) := nsr
+        ll : List List US := [[0 for i in 1..order] for j in 1..order]
+        for i in 1..order repeat
+            for j in 1..order repeat
+                ll(i)(j) := system(i)(j)
+        denm : SquareMatrix(order, US) := squareMatrix(matrix(ll))
+        nums : List SquareMatrix(order, US) := [empty() for i in 1..order]
+        for i in 1..order repeat
+            for j in 1..order repeat
+                for k in 1..order repeat
+                    if k = i then
+                        ll(j)(k) := system(j)(order+1)
+                    else
+                        ll(j)(k) := system(j)(k)
+            nums.i := squareMatrix(matrix(ll))
+        den := minordet(denm)
+        coefs : List US := [0 for i in 1..order]
+        for i in 1..order repeat
+            num := minordet(nums.i)
+            coefs.i := -num / den
+        res : LL := monomial(1, order)
+        for i in 0..order-1 repeat
+            res := res + monomial(coefs.(i+1), i)
+        res
 
 --Copyright (c) 2015, Abhinav Baid.
 --All rights reserved.
