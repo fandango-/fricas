@@ -33,6 +33,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   LA ==> Record(ope : LL, dext : PositiveInteger, alpha : F, rami : UP)
   RS ==> List Union(LL, LA)
   FRI ==> Union(SP, RS)
+  CB ==> Set Record(lpf : LL, dxt : PositiveInteger)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -65,6 +66,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ++ test function.
     testfo : (L3, SUP -> Factored(SUP), String) -> FRI
     ++ test function.
+    testsc : (L3, L3, SUP -> Factored(SUP)) -> Boolean
+    ++ test function.
+    testfg : (L, SUP -> Factored(SUP)) -> List L
+    ++ test function.
+    testlp : (L, Union(F, "infinity")) -> LL
+    ++ test function.
 
   Impl ==> add
     import from IntegerRetractions(F)
@@ -96,6 +103,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     factor_op : (LL, SUP -> Factored(SUP), String) -> FRI
     make_rightfactor : (LL, LA) -> LL
     lift_rightfactor : (PositiveInteger, LA) -> LL
+    same_charclass? : (LL, LL, SUP -> Factored(SUP)) -> Boolean
+    factor_global : (L, SUP -> Factored(SUP)) -> List L
+    l_p : (L, Union(F, "infinity")) -> LL
+    subsup : (UP, RF) -> RF
+    compute_bound : (CB, SUP -> Factored(SUP)) -> Integer
 
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
@@ -555,6 +567,16 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     testpd(np) ==
         plug_delta(np)
 
+-- factor_riccati takes a monic LinearOrdinaryDifferentialOperator3 having
+-- Laurent series coefficients, a factoring routine for polynomials and a
+-- string as input. The input operator should have only 1 slope and the Newton
+-- polynomial should be the power of an irreducible polynomial. For an
+-- explanation about what the possible option strings are, please refer to the
+-- documentation for the factor_op function. This subroutine handles the cases
+-- where algebraic extensions or ramifications are needed.
+-- References : Steps 3, 4, 5 in Algorithm Riccati solution and Steps 3, 4, 5, 6
+-- in Algorithm semi-regular parts of
+-- http://www.math.fsu.edu/~hoeij/compalg/diffop/versie9_3.pdf
     factor_riccati(f, factorizer, option) ==
         np := newtonpolygon(f)
         np1 := np.1
@@ -698,6 +720,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     testfr(f, factorizer, option) ==
         factor_riccati(convertL3toLL(f), factorizer, option)
 
+-- substitute(a, f) substitutes xD + a for xD in an operator f.
     substitute(a, f) ==
         new_mon : LL := monomial(1, 1)
         if a case UP then
@@ -726,6 +749,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     testsb(a, f) ==
         substitute(a, convertL3toLL(f)) :: LL
 
+-- ramification_of(f, coefr, n) gives the ramification of an expression; it maps
+-- xD to xD / n, and maps x to coefr * x^n.
     ramification_of(f, coefr, n) ==
         if coefr = 1 and n = 1 then
             return f
@@ -744,6 +769,16 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     testro(f, coefr, n) ==
         ramification_of(convertL3toLL(f), coefr, n)
 
+-- factor_op takes a monic LinearOrdinaryDifferentialOperator3 having Laurent
+-- series coefficients, a factoring routine for polynomials and a string as
+-- input and produces different kinds of local factorizations.
+-- The possible option strings are:
+-- "split over k((x))" gives a factorization over k((x))
+-- "all right factors" gives all safe right factors over k((x))
+-- "all alg factors" gives all safe right factors over alg. closure of k((x))
+-- "alg factor" gives one safe right factor over alg. closure of k((x))
+-- References : Algorithm Riccati solution and Algorithm semi-regular parts of
+-- http://www.math.fsu.edu/~hoeij/compalg/diffop/versie9_3.pdf
     factor_op(f, factorizer, option) ==
         fnr := factor_newton(f, factorizer, option)
         if option = "semireg" then
@@ -762,6 +797,14 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     testfo(f, factorizer, option) ==
         factor_op(convertL3toLL(f), factorizer, option)
 
+-- make_righfactor(f, ric) produces an irreducible right factor of f over k((x))
+-- from a 1st order right-factor over the algebraic closure of k((x)) where f is
+-- an operator. This subroutine computes LCLM(xD - r, "and conjugates over
+-- k((x))") where r is a Riccati solution. In this way, a local irreducible
+-- factor is obtained. This is only necessary if the coprime index is > 1,
+-- otherwise one can factor via the Newton method.
+-- References : Section 7 of
+-- http://www.math.fsu.edu/~hoeij/compalg/diffop/versie9_3.pdf
     make_rightfactor(f, ric) ==
         d : PositiveInteger := qcoerce(degree(ric.rami))
         -- now we multiply by the degree of the algebraic extension
@@ -773,6 +816,14 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         -- being ric. So, we need to get R using lift_rightfactor(d, ric).
         lift_rightfactor(d, ric)
 
+-- lift_righfactor is a function that lifts "coprime index > 1 factorizations".
+-- Meaning of the variables:
+-- ric : solution of the Riccati, i.e. 1st order factor over alg. clos. k((x))
+-- ram : ramification is a map x -> c * x^(ram) for a constant c.
+-- This procedure generates linear equations stating ric is a righthand factor
+-- of R. The coefficients of R are then computed by solving these equations.
+-- References : Section 7 of
+-- http://www.math.fsu.edu/~hoeij/compalg/diffop/versie9_3.pdf
     lift_rightfactor(order, ric) ==
         cric := leadingCoefficient(ric.rami)
         ram := degree(ric.rami)
@@ -832,6 +883,167 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         for i in 0..order-1 repeat
             res := res + monomial(coefs.(i+1), i)
         res
+
+    same_charclass?(f, g, factorizer) ==
+        if degree(f) ~= degree(g) then
+            return false
+        if degree(f) = 1 then
+            il : US := truncate(coefficient(f - g, 0), 0)
+            return order(il, 0) = 0 and integer?(coefficient(il, 0))
+        r := map(newtonpolygon,
+                 [f, g])$ListFunctions2(LL,
+                             List(Record(point : PO, slope : FZ, npoly : UP)))
+        r11 := r(1)(1)
+        r21 := r(2)(1)
+        if r11.slope = 0 then
+            c := r11.npoly
+            c2 := r21.npoly
+            d := degree(c)
+            dm1 : NonNegativeInteger := qcoerce(d - 1)
+            fd := d :: Integer :: F
+            cx : F := (coefficient(c, dm1)$UP - coefficient(c2, dm1)) / fd
+            if not integer?(cx) then
+                return false
+            r := [[[r11.point, r11.slope, eval(r11.npoly, monomial(1, 1),
+            monomial(1, 1) - cx :: UP)], r(1)(j) for j in 2..#(r(1))], r(2)]
+        if r(1) ~= r(2) then
+            return false
+        gg := value(factor_op(g, factorizer, "alg factor") :: RS) :: LA
+        rr := -truncate(coefficient(gg.ope, 0), 0)
+        gr : UP := gg.rami
+        ff := substitute(rr, ramification_of(f, leadingCoefficient(gr),
+                                             qcoerce(degree(gr)))) :: LL
+        ffnp := newtonpolygon(ff)
+        if ffnp(1).slope ~= 0 then
+            return false
+        fff := factors(factorUP(ffnp(1).npoly/leadingCoefficient(ffnp(1).npoly),
+                                factorizer))
+        for i in fff repeat
+            if (degree(i.factor) = 1 and integer?(coefficient(i.factor, 0) /
+                                                coefficient(i.factor, 1))) then
+                return true
+        false
+
+    testsc(f, g, factorizer) ==
+        same_charclass?(convertL3toLL(f), convertL3toLL(g), factorizer)
+
+-- work in progress.
+    factor_global(f, factorizer) ==
+        if degree(f) <= 1 then
+            return [f]
+        if leadingCoefficient(f) ~= 1 then
+            v := factor_global((1 / leadingCoefficient(f)) * f, factorizer)
+            return cons(leadingCoefficient(f) * v(1), [v(i) for i in 2..#v])
+        dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
+        dnf := factors(factorUP(lcm(dlc), factorizer))
+        singularities : CB := set [[l_p(f, "infinity"), 1]]
+        for i in dnf repeat
+            zso := zerosOf(makeSUP(i.factor))
+            for j in zso repeat
+                singularities := union(singularities, [l_p(f, j),
+                                                    qcoerce(degree(i.factor))])
+        bound : List FZ := [0 for i in 1..degree(f)-1]
+        eb : Integer := -1
+        for k in members(singularities) repeat
+            j : List Record(point : PO, slope : FZ, npoly : UP)
+            j := newtonpolygon(k.lpf)
+            j := append(j, [[[degree(k.lpf), 0], 0, 0]])
+            v : List FZ := []
+            for i in 1..(#j)-1 repeat
+                jiy := j(i).point.y
+                ji1y := j(i+1).point.y
+                jix := j(i).point.x
+                ji1x := j(i+1).point.x
+                for l in jix..ji1x-1 repeat
+                    v := append(v, [jiy :: FZ + (l - jix) * (ji1y - jiy)
+                                    /$FZ (ji1x - jix)])
+            for i in 1..degree(f)-1 repeat
+                bound(i) := bound(i) + k.dxt * v(i+1)
+            eb := eb + k.dxt
+        bound := [-bound(degree(f) - j) + j * eb :: FZ for j in 1..degree(f)-1]
+        eb := compute_bound(singularities, factorizer)
+        -- dummy return value.
+        [f]
+
+    testfg(f, factorizer) ==
+        factor_global(f, factorizer)
+
+    l_p(f, p) ==
+        lpf : L := 0
+        if p = 0 then
+            lpf := f
+        else
+            ftmp := f
+            while ftmp ~= 0 repeat
+                lc := leadingCoefficient(ftmp)
+                dg := degree(ftmp)
+                newx : RF
+                if p = "infinity" then
+                    newx := 1 / monomial(1, 1)
+                else
+                    newx := (monomial(1, 1) + p :: F :: UP) :: RF
+                lcn := subsup(numer(lc), newx)
+                lcd := subsup(denom(lc), newx)
+                slc := lcn / lcd
+                newd : L
+                if p = "infinity" then
+                    newd := -(monomial(1, 1)$UP ^ 2) :: RF * D()
+                else
+                    newd := D()
+                lpf := lpf + slc * newd ^ dg
+                ftmp := reductum ftmp
+        llr := convertL3toLL(convert(lpf)$LODOConvertions(F, UP, RF))
+        (1 / leadingCoefficient(llr)) * llr
+
+    testlp(f, p) ==
+        l_p(f, p)
+
+    subsup(np, newx) ==
+        res : RF := 0
+        nptmp := np
+        while nptmp ~= 0 repeat
+            lc := leadingCoefficient(nptmp)
+            dg := degree(nptmp)
+            res := res + (lc :: UP) * newx ^ dg
+            nptmp := reductum nptmp
+        res
+
+    compute_bound(singularities, factorizer) ==
+        res : FZ := 0
+        for i in members(singularities) repeat
+            -- compute the generalized exponents
+            v := factor_op(i.lpf, factorizer, "semireg") :: SP
+            ma : Union(FZ, "-infinity") := "-infinity"
+            for j in v repeat
+                if degree(j.ram) = 1 then
+                    -- c = - an exponent; bound = - sum exponents
+                    ms := -truncate(coefficient(j.op, 0), 0)
+                    c := coefficient(ms + j.expart, 0)
+                    -- now compute the trace of this algebraic number divided by
+                    -- the degree of this number over Q
+                    cq : FZ := 0
+                    if number?(c) then
+                        cq := retract(c)@FZ
+                    else
+                        cr := (retract(c)@AlgebraicNumber) :: F
+                        ncr := numerator(cr)
+                        dcr := retract(denominator(cr))@FZ
+                        c1 := isPlus(ncr)
+                        if c1 ~= "failed" then
+                            for k in (c1 :: List F) repeat
+                                if number?(k) then
+                                    cq := retract(k)@FZ
+                        cq := cq / dcr
+                    if ma = "-infinity" then
+                        ma := -(cq :: FZ)
+                    else
+                        ma := max(-(cq :: FZ), ma :: FZ)
+            if ma = "-infinity" then
+                -- there are no 1st order factors
+                res := 0
+                break
+            res := res + i.dxt * ma :: FZ
+        max(0, floor(res))
 
 --Copyright (c) 2015, Abhinav Baid.
 --All rights reserved.
