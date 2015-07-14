@@ -37,6 +37,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   CB ==> Set SG
   FG ==> List Record(sing : SG, arf : RS)
   TF ==> Union(List L, "failed")
+  T2 ==> Union(List UTS, "failed")
+  PL ==> Record(apr : List Polynomial UTS, ac : Integer)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -85,6 +87,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     skipped_factors : Table(LL, Integer) := table()
 
     convertUPtoUTS : UP -> UTS
+    convertUTStoUP : UTS -> UP
     convertL3toLL : L3 -> LL
     newtonpolygonPoints : LL -> List PO
     newtonpolygon : LL -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -110,6 +113,16 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     lift_rightfactor : (PositiveInteger, LA) -> LL
     same_charclass? : (LL, LL, SUP -> Factored(SUP)) -> Boolean
     try_factorization : (LL, Integer, List FZ, SG, L, Integer, Integer, String) -> TF
+    try_factorization2 : (List Polynomial UTS, Integer, List Symbol,
+                          List Symbol, List FZ, Integer, Integer) -> T2
+    lift_pade2 : (List Polynomial UTS, List Polynomial UTS, Integer,
+                  List Symbol, List Symbol, Integer, Integer) -> PL
+    smallest_pade2 : (List Polynomial UTS, Integer, List Symbol) -> List UTS
+    valuation_pade2 : (Polynomial UTS, Symbol, Integer) -> Integer
+    smaller_pade2? : (Polynomial UTS, Polynomial UTS, List Symbol) -> Boolean
+    wipe_pade2 : (Polynomial UTS, Polynomial UTS, Symbol, Integer) -> Polynomial UTS
+    flist : (LL, Integer) -> List List US
+    xDn_modr : (Integer, LL) -> LL
     factor_global : (L, SUP -> Factored(SUP)) -> List L
     factor_minmult1 : (List FZ, SG, L, Integer, LL, SUP -> Factored(SUP)) -> List L
     l_p : (L, Union(F, "infinity")) -> LL
@@ -119,6 +132,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
         UP2UTS(np)$tools
+
+    convertUTStoUP(ns) ==
+        tools := UTSodetools(F, UP, L2, UTS)
+        UTS2UP(ns, degree(ns))$tools
 
     convertL3toLL(f) ==
         tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
@@ -943,7 +960,161 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
 -- global factor.
 -- output: "failed" or a global factorization.
     try_factorization(r, max_order, bound, sng, f, eb, min_order, option) ==
+        nstep : Integer := 4
+        for i in max(degree(r), min_order)..max_order repeat
+            fls := flist(r, i)
+            n : Integer := 0
+            for j in fls repeat
+                for k in j repeat
+                    n := min(n, order(k, 0))
+            if n < 0 then
+                fls := [[monomial(1, -n) * k for k in j] for j in fls]
+            flst := [[retract(k) for k in j] for j in fls]
+            n := #flst
+            zvars := [new()$Symbol for j in 1..#flst(1)]
+            yvars := [new()$Symbol for j in 1..n]
+            fl : List Polynomial UTS
+            fl := [+/[flst(i)(j) * zvars(j) :: Polynomial UTS
+                    for j in 1..#zvars] for i in 1..n]
+            while ((tf2 := try_factorization2(fl, n, yvars, zvars, bound, eb,
+                    nstep)) ~= "failed") repeat
+                flm := tf2 :: List UTS
+                sr : L3 := +/[convertUTStoUP(flm(j+1)) :: RF * monomial(1, j)
+                              for j in 0..#flm-1]
+                sr := (1 / leadingCoefficient(sr)) * sr
+                if option = "use adjoint" then
+                    sr := adjoint(sr)
+                srl := convert(sr)$LODOConvertions(F, UP, RF)
+                if sng.point ~= 0 then
+                    ftmp := srl
+                    srl := 0
+                    while ftmp ~= 0 repeat
+                        lc := leadingCoefficient(ftmp)
+                        dg := degree(ftmp)
+                        newx : RF
+                        if sng.point = "infinity" then
+                            newx := 1 / monomial(1, 1)
+                        else
+                            newx := (monomial(1, 1) - sng.point :: F :: UP) :: RF
+                        lcn := subsup(numer(lc), newx)
+                        lcd := subsup(denom(lc), newx)
+                        slc := lcn / lcd
+                        newd : L
+                        if sng.point = "infinity" then
+                            newd := -(monomial(1, 1)$UP ^ 2) :: RF * D()
+                        else
+                            newd := D()
+                        srl := srl + slc * newd ^ dg
+                        ftmp := reductum ftmp
+                if option ~= "use adjoint" then
+                    re := rightGcd(f, srl)
+                    if degree(re) > 0 then
+                        return [rightQuotient(f, re), re]
+                    nstep := floor(3 /$FZ 2 * nstep) + 2
+                else
+                    re : L
+                    if sng.point = "infinity" then
+                        re := (1 / monomial(1, degree(f))) :: RF :: L
+                    else
+                        re := (1 /
+                    (monomial(1,1) - sng.point :: F :: UP)^degree(f)) :: RF :: L
+                    srl := re * leadingCoefficient(f) * srl
+                    srl := (1 / leadingCoefficient(srl)) * srl
+                    re := leftGcd(f, srl)
+                    if degree(re) > 0 then
+                        return [re, leftQuotient(f, re)]
+                    nstep := floor(3 /$FZ 2 * nstep) + 2
         "failed"
+
+    try_factorization2(fl, n, yv, zv, bound, eb, nstep) ==
+        v := lift_pade2([], fl, n, yv, zv, 0, nstep)
+        sm := smallest_pade2(v.apr, n, yv)
+        sm_old : List UTS := []
+        while sm ~= sm_old or sm.last = 0 repeat
+            sm_old := sm
+            v := lift_pade2(v.apr, fl, n, yv, zv, v.ac, nstep)
+            sm := smallest_pade2(v.apr, n, yv)
+            for i in sm repeat
+                if degree(i) :: Integer :: FZ > bound(#sm-1) + eb :: FZ then
+                    return "failed"
+        sm
+
+    smallest_pade2(appr, n, yv) ==
+        smallest : Integer := 1
+        for i in 2..n repeat
+            if smaller_pade2?(appr(i), appr(smallest), yv) then
+                smallest := i
+        [retract(coefficient(appr(smallest), yv(i), 1))@UTS for i in 1..n]
+
+    lift_pade2(appr, fl, n, yv, zv, olda, exta) ==
+        acc : NonNegativeInteger := qcoerce(olda + exta)
+        old_acc : NonNegativeInteger := qcoerce(olda)
+        app : List Polynomial UTS
+        if olda = 0 then
+            app := [yv(i) :: Polynomial UTS + map((x : UTS) : UTS +->
+                    truncate(x, acc), fl(i)) for i in 1..n]
+        else
+            app := map((x : Polynomial UTS) : Polynomial UTS +-> (
+                        eval(x, [equation(yv(i) :: Polynomial UTS,
+                        yv(i) :: Polynomial(UTS) + map((y : UTS) : UTS +->
+                        truncate(y, acc), fl(i)) - map((y : UTS) : UTS +->
+                        truncate(y, old_acc), fl(i))) for i in 1..n])), appr)
+        for i in old_acc..acc-1 repeat
+            for z in zv repeat
+                k : NonNegativeInteger := 0
+                for j in 1..n repeat
+                    if valuation_pade2(app(j), z, acc) = i and (k = 0 or
+                       smaller_pade2?(app(j), app(k), yv)) then
+                        k := j
+                if k > 0 then
+                    wp1 := [wipe_pade2(app(j), app(k), z, i) for j in 1..k-1]
+                    wp2 := [monomial(1, 1)$UTS * app(k)]
+                    wp3 := [wipe_pade2(app(j), app(k), z, i) for j in k+1..n]
+                    app := wp1
+                    app := append(app, wp2)
+                    app := append(app, wp3)
+        [app, acc]
+
+    valuation_pade2(f, z, acc) ==
+        if coefficient(f, z, 1) = 0 then
+            return acc
+        else
+            return order(retract(coefficient(f, z, 1))@UTS)
+
+    smaller_pade2?(f, g, vars) ==
+        n := #vars
+        ff := [degree(retract(coefficient(f, vars(i), 1))@UTS) for i in 1..n]
+        df := reduce(max, ff)
+        gg := [degree(retract(coefficient(f, vars(i), 1))@UTS) for i in 1..n]
+        dg := reduce(max, gg)
+        if df < dg then
+            return true
+        else if df > dg then
+            return false
+        for i in 1..n repeat
+            if ff(i) = df and coefficient(f, vars(i), 1) ~= 0 then
+                return false
+            if gg(i) = dg and coefficient(g, vars(i), 1) ~= 0 then
+                return true
+
+    wipe_pade2(f, g, z, i) ==
+        ff := coefficient(retract(coefficient(f, z, 1))@UTS, qcoerce(i))
+        gg := ff / coefficient(retract(coefficient(g, z, 1))@UTS, qcoerce(i))
+        f - gg :: UTS * g
+
+    flist(r, order) ==
+        res : List List US := []
+        for i in 0..order repeat
+            p := xDn_modr(i, r)
+            res := append(res, [[coefficient(p, j) for j in 0..degree(r)-1]])
+        res
+
+    xDn_modr(n, r) ==
+        if n < degree(r) then
+            return monomial(1, qcoerce(n))
+        a := xDn_modr(n-1, r)
+        coefa := coefficient(a, qcoerce(degree(r)-1))
+        monomial(1, 1)$LL * a + a * monomial(1, 1)$LL - coefa * r
 
 -- work in progress.
     factor_global(f, factorizer) ==
@@ -998,7 +1169,60 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                             return factor_minmult1(bound, i, f, eb, jj,
                                                    factorizer)
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
-        -- dummy return value.
+        if all_one then
+            -- f has only 1 exponential part
+            print("Better to use other methods" :: OutputForm)
+        all_one := true
+        for i in done_s repeat
+            all_one := all_one and #i.arf = 1
+            for j in i.arf repeat
+                t := try_factorization(j :: LL, floor(degree(f) /$FZ 2), bound,
+                                       i.sing, f, eb, 0, "")
+                if t ~= "failed" then
+                    return t :: List L
+            vrs := factor_op(adjoint(i.sing.lpf), factorizer,
+                             "all right factors") :: RS
+            for j in vrs repeat
+                t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
+                                       eb, 0, "use adjoint")
+                if t ~= "failed" then
+                    return t :: List L
+            -- now try the same but searching for higher order factors
+            for j in i.arf repeat
+                t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
+                                       eb, floor(degree(f) /$FZ 2)+1, "")
+                if t ~= "failed" then
+                    return t :: List L
+        if all_one then
+            -- up to conjugation only 1 exp part in every singularity
+            for i in done_s repeat
+                iarf1 := first(i.arf) :: LL
+                if degree(iarf1) > 1 then
+                    j1 := factor_op(iarf1, factorizer, "alg factor") :: RS
+                    jj := value(j1) :: LA
+                    kk : LL
+                    if degree(jj.rami) = 1 then
+                        kk := jj.ope
+                    else if jj.dext = 1 then
+                        jj.dext = 1 => "iterate"
+                    else
+                        kk := make_rightfactor(iarf1, jj)
+                    t := try_factorization(kk, degree(f)-1, bound, i.sing, f, 0,
+                                           0, "")
+                    if t ~= "failed" then
+                        return t :: List L
+                    vrs := factor_op(adjoint(i.sing.lpf), factorizer,
+                                     "all right factors") :: RS
+                    r_left : LL := 0
+                    for l in v while r_left = 0 repeat
+                        if same_charclass?(l :: LL, adjoint(kk), factorizer) then
+                            r_left := l :: LL
+                    -- now try if r gives a left hand global factor
+                    t := try_factorization(r_left, degree(f)-1, bound, i.sing,
+                                           f, 0, 0, "use adjoint")
+                    if t ~= "failed" then
+                        return t :: List L
+        print("Try the other factorizer as well" :: OutputForm)
         [f]
 
     testfg(f, factorizer) ==
