@@ -77,6 +77,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ++ test function.
     testlp : (L, Union(F, "infinity")) -> LL
     ++ test function.
+    factor : (L, SUP -> Factored(SUP)) -> List L
+    ++ to be documented later.
 
   Impl ==> add
     import from IntegerRetractions(F)
@@ -135,6 +137,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
 
     convertUTStoUP(ns) ==
         tools := UTSodetools(F, UP, L2, UTS)
+        ns = 0 => 0
         UTS2UP(ns, degree(ns))$tools
 
     convertL3toLL(f) ==
@@ -1035,7 +1038,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             v := lift_pade2(v.apr, fl, n, yv, zv, v.ac, nstep)
             sm := smallest_pade2(v.apr, n, yv)
             for i in sm repeat
-                if degree(i) :: Integer :: FZ > bound(#sm-1) + eb :: FZ then
+                if i ~= 0 and degree(i) :: Integer :: FZ > bound(#sm-1) + eb :: FZ then
                     return "failed"
         sm
 
@@ -1079,13 +1082,21 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         if coefficient(f, z, 1) = 0 then
             return acc
         else
-            return order(retract(coefficient(f, z, 1))@UTS)
+            return order(retract(coefficient(f, z, 1))@UTS, qcoerce(acc))
 
     smaller_pade2?(f, g, vars) ==
         n := #vars
-        ff := [degree(retract(coefficient(f, vars(i), 1))@UTS) for i in 1..n]
+        ff : List NonNegativeInteger
+        gg : List NonNegativeInteger
+        ff := [0 for i in 1..n]
+        for i in 1..n repeat
+            if coefficient(f, vars(i), 1) ~= 0 then
+                ff(i) := degree(retract(coefficient(f, vars(i), 1))@UTS)
         df := reduce(max, ff)
-        gg := [degree(retract(coefficient(f, vars(i), 1))@UTS) for i in 1..n]
+        gg := [0 for i in 1..n]
+        for i in 1..n repeat
+            if coefficient(g, vars(i), 1) ~= 0 then
+                gg(i) := degree(retract(coefficient(g, vars(i), 1))@UTS)
         dg := reduce(max, gg)
         if df < dg then
             return true
@@ -1115,6 +1126,15 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         a := xDn_modr(n-1, r)
         coefa := coefficient(a, qcoerce(degree(r)-1))
         monomial(1, 1)$LL * a + a * monomial(1, 1)$LL - coefa * r
+
+    factor(f, factorizer) ==
+        if degree(f) <= 1 then
+            return [f]
+        b := factor_global(f, factorizer)
+        if #b = 1 then
+            return b
+        else
+            return concat!(factor(b.1, factorizer), factor(b.2, factorizer))
 
 -- work in progress.
     factor_global(f, factorizer) ==
