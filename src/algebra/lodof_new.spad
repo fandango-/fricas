@@ -159,7 +159,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         yzero := order(leadingCoefficient(ftmp))
         while ftmp ~= 0 repeat
             xv := degree(ftmp)
-            yv := order(leadingCoefficient(ftmp))
+            yv := order(leadingCoefficient(ftmp), order(leadingCoefficient(f)))
             if xv ~= 0 then
                 points := cons([xv, yv], points)
             yzero := min(yzero, yv)
@@ -1123,6 +1123,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         if leadingCoefficient(f) ~= 1 then
             v := factor_global((1 / leadingCoefficient(f)) * f, factorizer)
             return cons(leadingCoefficient(f) * v(1), [v(i) for i in 2..#v])
+        if degree(f) = 2 then
+            -- may be faster
+            print("Better to use other methods" :: OutputForm)
         dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
         dnf := factors(factorUP(lcm(dlc), factorizer))
         singularities : CB := set [["infinity", l_p(f, "infinity"), 1]]
@@ -1222,6 +1225,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                                            f, 0, 0, "use adjoint")
                     if t ~= "failed" then
                         return t :: List L
+        -- may be incomplete
         print("Try the other factorizer as well" :: OutputForm)
         [f]
 
