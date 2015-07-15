@@ -1171,7 +1171,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             -- may be faster
             print("Better to use other methods" :: OutputForm)
         dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
-        dnf := factors(factorUP(lcm(dlc), factorizer))
+        (dlc :=
+        squareFreeBasis(dlc)$CylindricalAlgebraicDecompositionUtilities(F, UP))
+        dnf : List FA := []
+        for i in dlc repeat
+            dnf := append(dnf, factors(factorUP(i, factorizer)))
         singularities : CB
         if inf_singularity?(f) then
             singularities := set [["infinity", l_p(f, "infinity"), 1]]
