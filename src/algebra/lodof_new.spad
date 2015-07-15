@@ -79,6 +79,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     ++ test function.
     factor : (L, SUP -> Factored(SUP)) -> List L
     ++ to be documented later.
+    testis : L -> Boolean
+    ++ test function.
 
   Impl ==> add
     import from IntegerRetractions(F)
@@ -1136,6 +1138,28 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         else
             return concat!(factor(b.1, factorizer), factor(b.2, factorizer))
 
+    inf_singularity?(f : L) : Boolean ==
+        fi : L := 0
+        ftmp := f
+        ux : RF := -(monomial(1, 2)$UP) :: RF
+        yu : L := 1
+        for i in 0..degree(f) repeat
+            lc := coefficient(f, i)
+            lcn := subsup(numer(lc), 1 / monomial(1, 1))
+            lcd := subsup(denom(lc), 1 / monomial(1, 1))
+            slc := lcn / lcd
+            fi := fi + slc * yu
+            yu := ux * D() * yu
+        fi := (1 / leadingCoefficient(fi)) * fi
+        dlc := [denom(coefficient(fi, e))
+                for e in minimumDegree(fi)..degree(fi)]
+        if eval(lcm(dlc), monomial(1, 1), 0) = 0 then
+            return true
+        false
+
+    testis(f) ==
+        inf_singularity?(f)
+
 -- work in progress.
     factor_global(f, factorizer) ==
         if degree(f) <= 1 then
@@ -1148,7 +1172,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             print("Better to use other methods" :: OutputForm)
         dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
         dnf := factors(factorUP(lcm(dlc), factorizer))
-        singularities : CB := set [["infinity", l_p(f, "infinity"), 1]]
+        singularities : CB
+        if inf_singularity?(f) then
+            singularities := set [["infinity", l_p(f, "infinity"), 1]]
+        else
+            singularities := set []
         for i in dnf repeat
             zso := zerosOf(makeSUP(i.factor))
             for j in zso repeat
