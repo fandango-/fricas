@@ -1178,10 +1178,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         else
             singularities := set []
         for i in dnf repeat
-            zso := zerosOf(makeSUP(i.factor))
-            for j in zso repeat
-                singularities := union(singularities, [j, l_p(f, j),
-                                                    qcoerce(degree(i.factor))])
+            j := rootOf(makeSUP(i.factor))
+            singularities := union(singularities, [j, l_p(f, j),
+                                                   qcoerce(degree(i.factor))])
         bound : List FZ := [0 for i in 1..degree(f)-1]
         eb : Integer := -1
         for k in members(singularities) repeat
