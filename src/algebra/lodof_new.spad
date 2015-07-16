@@ -1057,13 +1057,14 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         app : List Polynomial UTS
         if olda = 0 then
             app := [yv(i) :: Polynomial UTS + map((x : UTS) : UTS +->
-                    truncate(x, acc), fl(i)) for i in 1..n]
+                    truncate(x, qcoerce(acc-1)), fl(i)) for i in 1..n]
         else
             app := map((x : Polynomial UTS) : Polynomial UTS +-> (
                         eval(x, [equation(yv(i) :: Polynomial UTS,
                         yv(i) :: Polynomial(UTS) + map((y : UTS) : UTS +->
-                        truncate(y, acc), fl(i)) - map((y : UTS) : UTS +->
-                        truncate(y, old_acc), fl(i))) for i in 1..n])), appr)
+                        truncate(y, qcoerce(acc-1)), fl(i)) - map((y : UTS) : UTS
+                        +-> truncate(y, qcoerce(old_acc-1)), fl(i)))
+                        for i in 1..n])), appr)
         for i in old_acc..acc-1 repeat
             for z in zv repeat
                 k : NonNegativeInteger := 0
@@ -1257,9 +1258,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                     kk : LL
                     if degree(jj.rami) = 1 then
                         kk := jj.ope
-                    else if jj.dext = 1 then
-                        jj.dext = 1 => "iterate"
-                    else
+                    jj.dext = 1 => "iterate"
+                    if degree(jj.rami) ~= 1 then
                         kk := make_rightfactor(iarf1, jj)
                     t := try_factorization(kk, degree(f)-1, bound, i.sing, f, 0,
                                            0, "")
@@ -1268,7 +1268,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                     vrs := factor_op(adjoint(i.sing.lpf), factorizer,
                                      "all right factors") :: RS
                     r_left : LL := 0
-                    for l in v while r_left = 0 repeat
+                    for l in vrs while r_left = 0 repeat
                         if same_charclass?(l :: LL, adjoint(kk), factorizer) then
                             r_left := l :: LL
                     -- now try if r gives a left hand global factor
