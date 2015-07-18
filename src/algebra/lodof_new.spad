@@ -1369,29 +1369,28 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             v := factor_op(i.lpf, factorizer, "semireg") :: SP
             ma : Union(FZ, "-infinity") := "-infinity"
             for j in v repeat
-                if degree(j.ram) = 1 then
-                    -- c = - an exponent; bound = - sum exponents
-                    ms := -truncate(coefficient(j.op, 0), 0)
-                    c := coefficient(ms + j.expart, 0)
-                    -- now compute the trace of this algebraic number divided by
-                    -- the degree of this number over Q
-                    cq : FZ := 0
-                    if number?(c) then
-                        cq := retract(c)@FZ
-                    else
-                        cr := (retract(c)@AlgebraicNumber) :: F
-                        ncr := numerator(cr)
-                        dcr := retract(denominator(cr))@FZ
-                        c1 := isPlus(ncr)
-                        if c1 ~= "failed" then
-                            for k in (c1 :: List F) repeat
-                                if number?(k) then
-                                    cq := retract(k)@FZ
-                        cq := cq / dcr
-                    if ma = "-infinity" then
-                        ma := -(cq :: FZ)
-                    else
-                        ma := max(-(cq :: FZ), ma :: FZ)
+                -- c = - an exponent; bound = - sum exponents
+                ms := -truncate(coefficient(j.op, 0), 0)
+                c := coefficient(ms + j.expart, 0) / (degree(j.ram) :: F)
+                -- now compute the trace of this algebraic number divided by
+                -- the degree of this number over Q
+                cq : FZ := 0
+                if number?(c) then
+                    cq := retract(c)@FZ
+                else
+                    cr := (retract(c)@AlgebraicNumber) :: F
+                    ncr := numerator(cr)
+                    dcr := retract(denominator(cr))@FZ
+                    c1 := isPlus(ncr)
+                    if c1 ~= "failed" then
+                        for k in (c1 :: List F) repeat
+                            if number?(k) then
+                                cq := retract(k)@FZ
+                    cq := cq / dcr
+                if ma = "-infinity" then
+                    ma := -(cq :: FZ)
+                else
+                    ma := max(-(cq :: FZ), ma :: FZ)
             if ma = "-infinity" then
                 -- there are no 1st order factors
                 res := 0
