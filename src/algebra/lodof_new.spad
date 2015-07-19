@@ -1,16 +1,46 @@
+)abbrev package VHPSOLV VectorHermitePadeSolver
+VectorHermitePadeSolver : Exports == Implementation where
+  F ==> Expression(Integer)
+  SUP ==> SparseUnivariatePolynomial(F)
+  Exports ==> with
+      hp_solve : (List Vector(SUP), List(NonNegativeInteger)) -> Matrix SUP
+        +++ hp_solve(lv, eta) solves Hermite-Pade problem with degree
+        +++ bound eta
+  Implementation ==> add
+
+    FFFG ==> FractionFreeFastGaussian(F, SUP)
+
+    power_action(m : NonNegativeInteger
+                ) : ((NonNegativeInteger, NonNegativeInteger, SUP) -> F) ==
+        (k, l, g) +-> DiffAction(k, m*l, g)$FFFG
+
+    hp_solve(lv, eta) ==
+        m := #first(lv)
+        lpp : List(SUP) := []
+        for v in lv repeat
+            #v ~= m =>
+                error "hp_solve: vectors must be of the same length"
+            pp : SUP := 0
+            for i in 1..m repeat
+                pp1 := multiplyExponents(v(i), m)
+                pp := pp + monomial(1, (i-1)::NonNegativeInteger)$SUP*pp1
+            lpp := cons(pp, lpp)
+        lpp := reverse!(lpp)
+        sumEta := reduce(_+, eta)
+        C : List(F) := [0 for i in 1..sumEta]
+        generalInterpolation(C, power_action(m), vector(lpp), eta)$FFFG
+
 )abbrev package LODOFN LinearOrdinaryDifferentialOperatorFactorizerNew
 ++ Description:
 ++ \spadtype{LinearOrdinaryDifferentialOperatorFactorizerNew} provides a
 ++ factorizer for linear ordinary differential operators whose coefficients
 ++ are rational functions.
 ++ Keywords: differential equation, ODE, LODO, factoring
-LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl where
-  R : Join(EuclideanDomain, Comparable, CharacteristicZero,
-           RetractableTo Integer, LinearlyExplicitRingOver Integer)
+LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl where
   var : Symbol
-  cen : Expression R
+  cen : Expression Integer
 
-  F ==> Expression R
+  F ==> Expression Integer
   UP ==> UnivariatePolynomial(var, F)
   RF ==> Fraction UP
   SUP ==> SparseUnivariatePolynomial(F)
@@ -37,7 +67,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
   CB ==> Set SG
   FG ==> List Record(sing : SG, arf : RS)
   TF ==> Union(List L, "failed")
-  T2 ==> Union(List UTS, "failed")
+  T2 ==> Union(List SUP, "failed")
   PL ==> Record(apr : List Polynomial UTS, ac : Integer)
 
   Exports ==> with
@@ -91,7 +121,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     skipped_factors : Table(LL, Integer) := table()
 
     convertUPtoUTS : UP -> UTS
-    convertUTStoUP : UTS -> UP
+    convertUTStoUP : (UTS, Integer) -> UP
     convertL3toLL : L3 -> LL
     newtonpolygonPoints : LL -> List PO
     newtonpolygon : LL -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -117,14 +147,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
     lift_rightfactor : (PositiveInteger, LA) -> LL
     same_charclass? : (LL, LL, SUP -> Factored(SUP)) -> Boolean
     try_factorization : (LL, Integer, List FZ, SG, L, Integer, Integer, String) -> TF
-    try_factorization2 : (List Polynomial UTS, Integer, List Symbol,
-                          List Symbol, List FZ, Integer, Integer) -> T2
-    lift_pade2 : (List Polynomial UTS, List Polynomial UTS, Integer,
-                  List Symbol, List Symbol, Integer, Integer) -> PL
-    smallest_pade2 : (List Polynomial UTS, Integer, List Symbol) -> List UTS
-    valuation_pade2 : (Polynomial UTS, Symbol, Integer) -> Integer
-    smaller_pade2? : (Polynomial UTS, Polynomial UTS, List Symbol) -> Boolean
-    wipe_pade2 : (Polynomial UTS, Polynomial UTS, Symbol, Integer) -> Polynomial UTS
+    try_factorization2 : (List List UTS, Integer, List FZ, Integer, Integer) -> T2
     flist : (LL, Integer) -> List List US
     xDn_modr : (Integer, LL) -> LL
     factor_global : (L, SUP -> Factored(SUP)) -> List L
@@ -137,10 +160,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
         tools := UTSodetools(F, UP, L2, UTS)
         UP2UTS(np)$tools
 
-    convertUTStoUP(ns) ==
+    convertUTStoUP(ns, n) ==
         tools := UTSodetools(F, UP, L2, UTS)
-        ns = 0 => 0
-        UTS2UP(ns, degree(ns))$tools
+        UTS2UP(ns, qcoerce(n-1))$tools
 
     convertL3toLL(f) ==
         tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
@@ -976,15 +998,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                 fls := [[monomial(1, -n) * k for k in j] for j in fls]
             flst := [[retract(k) for k in j] for j in fls]
             n := #flst
-            zvars := [new()$Symbol for j in 1..#flst(1)]
-            yvars := [new()$Symbol for j in 1..n]
-            fl : List Polynomial UTS
-            fl := [+/[flst(i)(j) * zvars(j) :: Polynomial UTS
-                    for j in 1..#zvars] for i in 1..n]
-            while ((tf2 := try_factorization2(fl, n, yvars, zvars, bound, eb,
-                    nstep)) ~= "failed") repeat
-                flm := tf2 :: List UTS
-                sr : L3 := +/[convertUTStoUP(flm(j+1)) :: RF * monomial(1, j)
+            while ((tf2 := try_factorization2(flst, n, bound, eb, nstep)) ~=
+                   "failed") repeat
+                flm := tf2 :: List SUP
+                sr : L3 := +/[unmakeSUP(flm(j+1))$UP :: RF * monomial(1, j)
                               for j in 0..#flm-1]
                 sr := (1 / leadingCoefficient(sr)) * sr
                 if option = "use adjoint" then
@@ -1031,90 +1048,47 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                     nstep := floor(3 /$FZ 2 * nstep) + 2
         "failed"
 
-    try_factorization2(fl, n, yv, zv, bound, eb, nstep) ==
-        v := lift_pade2([], fl, n, yv, zv, 0, nstep)
-        sm := smallest_pade2(v.apr, n, yv)
-        sm_old : List UTS := []
+    try_factorization2(fl, n, bound, eb, nstep) ==
+        acc : Integer := 0
+        flm := [map((x : UTS) : UTS +-> truncate(x, qcoerce(acc+nstep-1)), i)
+                for i in fl]
+        acc := acc + nstep
+        lv : List Vector SUP
+        lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in flm]
+        eta : List NonNegativeInteger
+        eta := [qcoerce(retract(bound(#lv-1))@Integer + eb) for i in 1..n]
+        hps := hp_solve(lv, eta)$VectorHermitePadeSolver
+        minci := minColIndex(hps)
+        maxci := maxColIndex(hps)
+        sm : List SUP := []
+        for j in minci..maxci repeat
+            sm := members(column(hps, j))
+            mr : Vector SUP := zero(#first(lv))
+            for k in sm for l in lv repeat
+                mr := mr + k * l
+            if zero?(mr) then
+                break
+        if sm = [] then
+            return "failed"
+        sm_old : List SUP := []
         while sm ~= sm_old or sm.last = 0 repeat
             sm_old := sm
-            v := lift_pade2(v.apr, fl, n, yv, zv, v.ac, nstep)
-            sm := smallest_pade2(v.apr, n, yv)
-            for i in sm repeat
-                if i ~= 0 and degree(i) :: Integer :: FZ > bound(#sm-1) + eb :: FZ then
-                    return "failed"
+            flm := [map((x : UTS) : UTS +-> truncate(x, qcoerce(acc+nstep-1)), i)
+                    for i in fl]
+            acc := acc + nstep
+            lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in flm]
+            hps := hp_solve(lv, eta)$VectorHermitePadeSolver
+            sm := []
+            for j in minci..maxci repeat
+                sm := members(column(hps, j))
+                mr := zero(#first(lv))
+                for k in sm for l in lv repeat
+                    mr := mr + k * l
+                if zero?(mr) then
+                    break
+            if sm = [] then
+                return "failed"
         sm
-
-    smallest_pade2(appr, n, yv) ==
-        smallest : Integer := 1
-        for i in 2..n repeat
-            if smaller_pade2?(appr(i), appr(smallest), yv) then
-                smallest := i
-        [retract(coefficient(appr(smallest), yv(i), 1))@UTS for i in 1..n]
-
-    lift_pade2(appr, fl, n, yv, zv, olda, exta) ==
-        acc : NonNegativeInteger := qcoerce(olda + exta)
-        old_acc : NonNegativeInteger := qcoerce(olda)
-        app : List Polynomial UTS
-        if olda = 0 then
-            app := [yv(i) :: Polynomial UTS + map((x : UTS) : UTS +->
-                    truncate(x, qcoerce(acc-1)), fl(i)) for i in 1..n]
-        else
-            app := map((x : Polynomial UTS) : Polynomial UTS +-> (
-                        eval(x, [equation(yv(i) :: Polynomial UTS,
-                        yv(i) :: Polynomial(UTS) + map((y : UTS) : UTS +->
-                        truncate(y, qcoerce(acc-1)), fl(i)) - map((y : UTS) : UTS
-                        +-> truncate(y, qcoerce(old_acc-1)), fl(i)))
-                        for i in 1..n])), appr)
-        for i in old_acc..acc-1 repeat
-            for z in zv repeat
-                k : NonNegativeInteger := 0
-                for j in 1..n repeat
-                    if valuation_pade2(app(j), z, acc) = i and (k = 0 or
-                       smaller_pade2?(app(j), app(k), yv)) then
-                        k := j
-                if k > 0 then
-                    wp1 := [wipe_pade2(app(j), app(k), z, i) for j in 1..k-1]
-                    wp2 := [monomial(1, 1)$UTS * app(k)]
-                    wp3 := [wipe_pade2(app(j), app(k), z, i) for j in k+1..n]
-                    app := wp1
-                    app := append(app, wp2)
-                    app := append(app, wp3)
-        [app, acc]
-
-    valuation_pade2(f, z, acc) ==
-        if coefficient(f, z, 1) = 0 then
-            return acc
-        else
-            return order(retract(coefficient(f, z, 1))@UTS, qcoerce(acc))
-
-    smaller_pade2?(f, g, vars) ==
-        n := #vars
-        ff : List NonNegativeInteger
-        gg : List NonNegativeInteger
-        ff := [0 for i in 1..n]
-        for i in 1..n repeat
-            if coefficient(f, vars(i), 1) ~= 0 then
-                ff(i) := degree(retract(coefficient(f, vars(i), 1))@UTS)
-        df := reduce(max, ff)
-        gg := [0 for i in 1..n]
-        for i in 1..n repeat
-            if coefficient(g, vars(i), 1) ~= 0 then
-                gg(i) := degree(retract(coefficient(g, vars(i), 1))@UTS)
-        dg := reduce(max, gg)
-        if df < dg then
-            return true
-        else if df > dg then
-            return false
-        for i in 1..n repeat
-            if ff(i) = df and coefficient(f, vars(i), 1) ~= 0 then
-                return false
-            if gg(i) = dg and coefficient(g, vars(i), 1) ~= 0 then
-                return true
-
-    wipe_pade2(f, g, z, i) ==
-        ff := coefficient(retract(coefficient(f, z, 1))@UTS, qcoerce(i))
-        gg := ff / coefficient(retract(coefficient(g, z, 1))@UTS, qcoerce(i))
-        f - gg :: UTS * g
 
     flist(r, order) ==
         res : List List US := []
@@ -1170,7 +1144,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
             return cons(leadingCoefficient(f) * v(1), [v(i) for i in 2..#v])
         if degree(f) = 2 then
             -- may be faster
-            print("Better to use other methods" :: OutputForm)
+            return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
         dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
         (dlc :=
         squareFreeBasis(dlc)$CylindricalAlgebraicDecompositionUtilities(F, UP))
@@ -1226,7 +1200,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
         if all_one then
             -- f has only 1 exponential part
-            print("Better to use other methods" :: OutputForm)
+            return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
         all_one := true
         for i in done_s repeat
             all_one := all_one and #i.arf = 1
@@ -1277,8 +1251,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(R, var, cen) : Exports == Impl w
                     if t ~= "failed" then
                         return t :: List L
         -- may be incomplete
-        print("Try the other factorizer as well" :: OutputForm)
-        [f]
+        factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
 
     testfg(f, factorizer) ==
         factor_global(f, factorizer)
