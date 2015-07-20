@@ -41,6 +41,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
   cen : Expression Integer
 
   F ==> Expression Integer
+  K ==> Kernel F
+  P ==> SparseMultivariatePolynomial(Integer, K)
   UP ==> UnivariatePolynomial(var, F)
   RF ==> Fraction UP
   SUP ==> SparseUnivariatePolynomial(F)
@@ -69,6 +71,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
   TF ==> Union(List L, "failed")
   T2 ==> Union(List SUP, "failed")
   PL ==> Record(apr : List Polynomial UTS, ac : Integer)
+  POLYCATQ ==> PolynomialCategoryQuotientFunctions(IndexedExponents(K),
+                                                   K, Integer, P, F)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -110,6 +114,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     factor : (L, SUP -> Factored(SUP)) -> List L
     ++ to be documented later.
     testis : L -> Boolean
+    ++ test function.
+    testgt : (F, K) -> F
     ++ test function.
 
   Impl ==> add
@@ -154,7 +160,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     factor_minmult1 : (List FZ, SG, L, Integer, LL, SUP -> Factored(SUP)) -> List L
     l_p : (L, Union(F, "infinity")) -> LL
     subsup : (UP, RF) -> RF
-    compute_bound : (CB, SUP -> Factored(SUP)) -> Integer
+    compute_bound : (CB, SUP -> Factored(SUP), F) -> Integer
 
     convertUPtoUTS(np) ==
         tools := UTSodetools(F, UP, L2, UTS)
@@ -1179,7 +1185,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 bound(i) := bound(i) + k.dxt * v(i+1)
             eb := eb + k.dxt
         bound := [-bound(degree(f) - j) + j * eb :: FZ for j in 1..degree(f)-1]
-        eb := compute_bound(singularities, factorizer)
+        eb := compute_bound(singularities, factorizer, 0)
         all_one := true
         -- the singularities we have considered
         done_s : FG := []
@@ -1335,31 +1341,41 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             nptmp := reductum nptmp
         res
 
-    compute_bound(singularities, factorizer) ==
+    get_trace(f : F, k : K) : F ==
+        min_pol := minPoly(k)
+        Sae := SimpleAlgebraicExtension(F, UP, unmakeSUP(min_pol))
+        fa := univariate(f, k, min_pol)$POLYCATQ
+        trace(reduce(unmakeSUP(fa))$Sae)$Sae
+
+    testgt(f, k) ==
+        get_trace(f, k)
+
+    compute_bound(singularities, factorizer, rlc) ==
         res : FZ := 0
         for i in members(singularities) repeat
             -- compute the generalized exponents
             v := factor_op(i.lpf, factorizer, "semireg") :: SP
             ma : Union(FZ, "-infinity") := "-infinity"
-            for j in v repeat
+            for j in v for ji in 1..#v repeat
                 -- c = - an exponent; bound = - sum exponents
                 ms := -truncate(coefficient(j.op, 0), 0)
                 c := coefficient(ms + j.expart, 0) / (degree(j.ram) :: F)
+                for jj in rest(v, ji) repeat
+                    msjj := -truncate(coefficient(jj.op, 0), 0)
+                    c := c + (order(msjj + jj.expart - ms - j.expart, 0) /
+                              degree(j.ram)) :: F
                 -- now compute the trace of this algebraic number divided by
                 -- the degree of this number over Q
-                cq : FZ := 0
-                if number?(c) then
-                    cq := retract(c)@FZ
-                else
-                    cr := (retract(c)@AlgebraicNumber) :: F
-                    ncr := numerator(cr)
-                    dcr := retract(denominator(cr))@FZ
-                    c1 := isPlus(ncr)
-                    if c1 ~= "failed" then
-                        for k in (c1 :: List F) repeat
-                            if number?(k) then
-                                cq := retract(k)@FZ
-                    cq := cq / dcr
+                ks := kernels(c)
+                for k in ks repeat
+                    if (retractIfCan(k :: F)@Union(AlgebraicNumber, "failed") ~=
+                         "failed") then
+                        c := get_trace(c, k) / (degree(minPoly(k)) :: F)
+                    else
+                        if eval(denominator(c), k, rlc) = 0 then
+                            return compute_bound(singularities,factorizer,rlc+1)
+                        c := eval(c, k, rlc)
+                cq := retract(c)@FZ
                 if ma = "-infinity" then
                     ma := -(cq :: FZ)
                 else
