@@ -71,6 +71,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
   TF ==> Union(List L, "failed")
   T2 ==> Union(List SUP, "failed")
   PL ==> Record(apr : List Polynomial UTS, ac : Integer)
+  GE ==> List Record(ecs : List US, ecr : UP, ect : RF)
   POLYCATQ ==> PolynomialCategoryQuotientFunctions(IndexedExponents(K),
                                                    K, Integer, P, F)
 
@@ -117,6 +118,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     ++ test function.
     testgt : (F, K) -> F
     ++ test function.
+    gen_exp : (L, Union(F, "infinity"), SUP -> Factored(SUP)) -> GE
+    ++ to be documented later.
 
   Impl ==> add
     import from IntegerRetractions(F)
@@ -800,9 +803,14 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             res := res + lc * new_mon ^ dg
             ftmp := reductum ftmp
         if f case LL then
+            fl := f :: LL
+            if key?(fl, skipped_factors) then
+                skipped_factors(res) := skipped_factors(fl)
             return res
         else
             fr := f :: LA
+            if key?(fr.ope, skipped_factors) then
+                skipped_factors(res) := skipped_factors(fr.ope)
             return [res, fr.dext, fr.alpha, fr.rami]
 
     testsb(a, f) ==
@@ -941,6 +949,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         res : LL := monomial(1, order)
         for i in 0..order-1 repeat
             res := res + monomial(coefs.(i+1), i)
+        if key?(ric.ope, skipped_factors) then
+            skipped_factors(res) := skipped_factors(ric.ope)
         res
 
     same_charclass?(f, g, factorizer) ==
@@ -1068,11 +1078,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         maxci := maxColIndex(hps)
         sm : List SUP := []
         for j in minci..maxci repeat
-            sm := members(column(hps, j))
+            smtmp := members(column(hps, j))
             mr : Vector SUP := zero(#first(lv))
-            for k in sm for l in lv repeat
+            for k in smtmp for l in lv repeat
                 mr := mr + k * l
             if zero?(mr) then
+                sm := smtmp
                 break
         if sm = [] then
             return "failed"
@@ -1086,11 +1097,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             hps := hp_solve(lv, eta)$VectorHermitePadeSolver
             sm := []
             for j in minci..maxci repeat
-                sm := members(column(hps, j))
+                smtmp := members(column(hps, j))
                 mr := zero(#first(lv))
-                for k in sm for l in lv repeat
+                for k in smtmp for l in lv repeat
                     mr := mr + k * l
                 if zero?(mr) then
+                    sm := smtmp
                     break
             if sm = [] then
                 return "failed"
@@ -1117,7 +1129,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         if #b = 1 then
             return b
         else
-            return concat!(factor(b.1, factorizer), factor(b.2, factorizer))
+            res := concat(factor(b.1, factorizer), factor(b.2, factorizer))
+            for i in 3..#b repeat
+                concat!(res, factor(b.i, factorizer))
+            return res
 
     inf_singularity?(f : L) : Boolean ==
         fi : L := 0
@@ -1200,7 +1215,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     done_s := append(done_s, [[i, vrs]])
                     for j in vrs repeat
                         jj := j :: LL
-                        if not key?(jj, skipped_factors) or skipped_factors(jj) = 0 then
+                        if key?(jj, skipped_factors) and skipped_factors(jj) = 0 then
                             return factor_minmult1(bound, i, f, eb, jj,
                                                    factorizer)
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
@@ -1386,6 +1401,35 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 break
             res := res + i.dxt * ma :: FZ
         max(0, floor(res))
+
+    make_poly(f : LL) : SUP ==
+        res : SUP := 0
+        ftmp := f
+        while ftmp ~= 0 repeat
+            lc := leadingCoefficient(ftmp)
+            dg := degree(ftmp)
+            res := res + monomial(coefficient(lc, 0), dg)
+            ftmp := reductum ftmp
+        res
+
+    gen_exp(f, p, factorizer) ==
+        v := factor_op(l_p(f, p), factorizer, "semireg") :: SP
+        res : GE := []
+        for e in v repeat
+            -- ramification index
+            r := degree(e.ram)
+            -- semi-regular part
+            s := e.op
+            es := [rootOf(i.factor) for i in factors(factorizer(make_poly(s)))]
+            -- now add expart, then divide by r
+            ss := [(j :: US + e.expart) / (r :: F) for j in es]
+            tr : RF
+            if p = "infinity" then
+                tr := 1 / monomial(1, 1)
+            else
+                tr := (monomial(1, 1) - p :: F :: UP) :: RF
+            res := append(res, [[ss, e.ram, tr]])
+        res
 
 --Copyright (c) 2015, Abhinav Baid.
 --All rights reserved.
