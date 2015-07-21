@@ -1072,7 +1072,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         lv : List Vector SUP
         lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in flm]
         eta : List NonNegativeInteger
-        eta := [qcoerce(retract(bound(#lv-1))@Integer + eb) for i in 1..n]
+        eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
         hps := hp_solve(lv, eta)$VectorHermitePadeSolver
         minci := minColIndex(hps)
         maxci := maxColIndex(hps)
@@ -1365,20 +1365,32 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     testgt(f, k) ==
         get_trace(f, k)
 
+    make_poly(f : LL) : SUP ==
+        res : SUP := 0
+        ftmp := f
+        while ftmp ~= 0 repeat
+            lc := leadingCoefficient(ftmp)
+            dg := degree(ftmp)
+            res := res + monomial(coefficient(lc, 0), dg)
+            ftmp := reductum ftmp
+        res
+
     compute_bound(singularities, factorizer, rlc) ==
         res : FZ := 0
         for i in members(singularities) repeat
             -- compute the generalized exponents
             v := factor_op(i.lpf, factorizer, "semireg") :: SP
             ma : Union(FZ, "-infinity") := "-infinity"
-            for j in v for ji in 1..#v repeat
+            for j in v repeat
                 -- c = - an exponent; bound = - sum exponents
-                ms := -truncate(coefficient(j.op, 0), 0)
-                c := coefficient(ms + j.expart, 0) / (degree(j.ram) :: F)
-                for jj in rest(v, ji) repeat
-                    msjj := -truncate(coefficient(jj.op, 0), 0)
-                    c := c + (order(msjj + jj.expart - ms - j.expart, 0) /
-                              degree(j.ram)) :: F
+                r := degree(j.ram)
+                -- semi-regular part
+                s := j.op
+                es := [retract(rootOf(k.factor))@FZ
+                       for k in factors(factorizer(make_poly(s)))]
+                ms := reduce(min, es) :: F
+                -- now add expart, then divide by r
+                c := coefficient(ms :: US + j.expart, 0) / (r :: F)
                 -- now compute the trace of this algebraic number divided by
                 -- the degree of this number over Q
                 ks := kernels(c)
@@ -1401,16 +1413,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 break
             res := res + i.dxt * ma :: FZ
         max(0, floor(res))
-
-    make_poly(f : LL) : SUP ==
-        res : SUP := 0
-        ftmp := f
-        while ftmp ~= 0 repeat
-            lc := leadingCoefficient(ftmp)
-            dg := degree(ftmp)
-            res := res + monomial(coefficient(lc, 0), dg)
-            ftmp := reductum ftmp
-        res
 
     gen_exp(f, p, factorizer) ==
         v := factor_op(l_p(f, p), factorizer, "semireg") :: SP
