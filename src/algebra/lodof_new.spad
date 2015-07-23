@@ -973,8 +973,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             cx : F := (coefficient(c, dm1)$UP - coefficient(c2, dm1)) / fd
             if not integer?(cx) then
                 return false
-            r := [[[r11.point, r11.slope, eval(r11.npoly, monomial(1, 1),
-            monomial(1, 1) - cx :: UP)], r(1)(j) for j in 2..#(r(1))], r(2)]
+            r := [cons([r11.point, r11.slope, eval(r11.npoly, monomial(1, 1),
+            monomial(1, 1) - cx :: UP)], [r(1)(j) for j in 2..#(r(1))]), r(2)]
         if r(1) ~= r(2) then
             return false
         gg := value(factor_op(g, factorizer, "alg factor") :: RS) :: LA
