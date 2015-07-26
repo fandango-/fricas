@@ -309,9 +309,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                             e := e / ((dvif :: Integer) :: F)
                             if integer?(e) and e ~= 0 then
                                 ie := integer(e)
-                                id := d :: Integer
-                                quot := (ie quo (id + 1)) :: UP
-                                newx : UP := monomial(1,1) + quot
+                                newx : UP := monomial(1,1) + ie :: UP
                                 sbt := eval(vjf, monomial(1,1), newx)
                                 (vif - sbt) ~= 0 => "iterate"
                                 if ie > 0 then
