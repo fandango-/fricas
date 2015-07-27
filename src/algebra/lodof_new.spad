@@ -1292,10 +1292,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         if t ~= "failed" then
             return t :: List L
         -- now try more terms
-        t := try_factorization(r, degree(f)-1, bound, sng, f, eb, fl, "")
+        t := try_factorization(r, degree(f)-1, bound, sng, f, eb, fl+1, "")
         if t ~= "failed" then
             return t :: List L
-        t := try_factorization(r_left, degree(f)-1, bound, sng, f, eb, fl,
+        t := try_factorization(r_left, degree(f)-1, bound, sng, f, eb, fl+1,
                                "use adjoint")
         if t ~= "failed" then
             return t :: List L
