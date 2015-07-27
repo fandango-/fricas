@@ -1055,7 +1055,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                         re := (1 /
                     (monomial(1,1) - sng.point :: F :: UP)^degree(f)) :: RF :: L
                     srl := re * leadingCoefficient(f) * srl
-                    srl := (1 / leadingCoefficient(srl)) * srl
+                    srl := srl * (1 / leadingCoefficient(srl))
                     re := leftGcd(f, srl)
                     if degree(re) > 0 then
                         return [re, leftQuotient(f, re)]
