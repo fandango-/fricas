@@ -954,6 +954,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     same_charclass?(f, g, factorizer) ==
         if degree(f) ~= degree(g) then
             return false
+        if leadingCoefficient(f) ~= 1 then
+            f := (1 / leadingCoefficient(f)) * f
+        if leadingCoefficient(g) ~= 1 then
+            g := (1 / leadingCoefficient(g)) * g
         if degree(f) = 1 then
             il : US := truncate(coefficient(f - g, 0), 0)
             return order(il, 0) = 0 and integer?(coefficient(il, 0))
