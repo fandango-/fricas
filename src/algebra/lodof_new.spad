@@ -127,8 +127,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     import from StreamFunctions2(F2, LL)
     import from StreamFunctions3(LL, Integer, TERM)
 
-    skipped_factors : Table(LL, Integer) := table()
-
     convertUPtoUTS : UP -> UTS
     convertUTStoUP : (UTS, Integer) -> UP
     convertL3toLL : L3 -> LL
@@ -160,7 +158,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     flist : (LL, Integer) -> List List US
     xDn_modr : (Integer, LL) -> LL
     factor_global : (L, SUP -> Factored(SUP)) -> List L
-    factor_minmult1 : (List FZ, SG, L, Integer, LL, SUP -> Factored(SUP)) -> List L
     l_p : (L, Union(F, "infinity")) -> LL
     subsup : (UP, RF) -> RF
     compute_bound : (CB, SUP -> Factored(SUP), F) -> Integer
@@ -290,12 +287,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             else
                 -- regular singular case, we compute the unsafe factors
                 unsafe := set []
-                -- n_unsafe is the number of factors with an exponent that is
-                -- the exponent of this factor i minus a positive integer.
-                n_unsafe : Table (FA, Integer) := table()
                 semi : Table(FA, UP) := table()
                 for i in v repeat
-                    n_unsafe(i) := 0
                     semi(i) := i.factor ^ qcoerce(i.exponent)
                 for i in v for ii in 1..(#v)-1 repeat
                     restl := rest(v, ii)
@@ -314,12 +307,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                                 (vif - sbt) ~= 0 => "iterate"
                                 if ie > 0 then
                                     unsafe := union(unsafe, i)
-                                    n_unsafe(j) := (n_unsafe(j)+i.exponent)
                                     semi(j) := (semi(j) * vif ^
                                                 qcoerce(i.exponent))
                                 else
                                     unsafe := union(unsafe, j)
-                                    n_unsafe(i) := (n_unsafe(i)+j.exponent)
                                     semi(i) := (semi(i) * vjf ^
                                                 qcoerce(j.exponent))
                 v := members(difference(set(v), unsafe))
@@ -332,8 +323,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 return [f]
             for i in v repeat
                 jl : F2 := factor_newton2(f, i.factor, k)
-                if slo = 0 and option ~= "semireg" then
-                    skipped_factors(jl.Rt) := n_unsafe(i)
                 if option = "alg factor" then
                     return [jl.Rt]
                 else if option = "split over k((x))" then
@@ -802,13 +791,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             ftmp := reductum ftmp
         if f case LL then
             fl := f :: LL
-            if key?(fl, skipped_factors) then
-                skipped_factors(res) := skipped_factors(fl)
             return res
         else
             fr := f :: LA
-            if key?(fr.ope, skipped_factors) then
-                skipped_factors(res) := skipped_factors(fr.ope)
             return [res, fr.dext, fr.alpha, fr.rami]
 
     testsb(a, f) ==
@@ -947,8 +932,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         res : LL := monomial(1, order)
         for i in 0..order-1 repeat
             res := res + monomial(coefs.(i+1), i)
-        if key?(ric.ope, skipped_factors) then
-            skipped_factors(res) := skipped_factors(ric.ope)
         res
 
     same_charclass?(f, g, factorizer) ==
@@ -1215,16 +1198,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     vrs := factor_op(i.lpf, factorizer,
                                      "all right factors") :: RS
                     done_s := append(done_s, [[i, vrs]])
-                    for j in vrs repeat
-                        jj := j :: LL
-                        if key?(jj, skipped_factors) and skipped_factors(jj) = 0 then
-                            return factor_minmult1(bound, i, f, eb, jj,
-                                                   factorizer)
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
         if all_one then
             -- f has only 1 exponential part
             return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
         all_one := true
+        done_sa : FG := []
         for i in done_s repeat
             all_one := all_one and #i.arf = 1
             for j in i.arf repeat
@@ -1234,15 +1213,22 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     return t :: List L
             vrs := factor_op(adjoint(i.sing.lpf), factorizer,
                              "all right factors") :: RS
+            done_sa := append(done_sa, [[i.sing, vrs]])
             for j in vrs repeat
-                t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
-                                       eb, 0, "use adjoint")
+                t := try_factorization(j :: LL, floor(degree(f) /$FZ 2), bound,
+                                       i.sing, f, eb, 0, "use adjoint")
                 if t ~= "failed" then
                     return t :: List L
-            -- now try the same but searching for higher order factors
+        -- now try the same but searching for higher order factors
+        for i in done_s for ia in done_sa repeat
             for j in i.arf repeat
                 t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
                                        eb, floor(degree(f) /$FZ 2)+1, "")
+                if t ~= "failed" then
+                    return t :: List L
+            for j in ia.arf repeat
+                t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
+                                       eb, floor(degree(f) /$FZ 2)+1, "use adjoint")
                 if t ~= "failed" then
                     return t :: List L
         if all_one then
@@ -1278,45 +1264,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
 
     testfg(f, factorizer) ==
         factor_global(f, factorizer)
-
-    factor_minmult1(bound, sng, f, eb, r, factorizer) ==
-        fl := floor(degree(f) /$FZ 2)
-        t := try_factorization(r, fl, bound, sng, f, eb, 0, "")
-        if t ~= "failed" then
-            return t :: List L
-        w := factor_op(adjoint(sng.lpf), factorizer, "all right factors") :: RS
-        r_left : LL := 0
-        for i in w while r_left = 0 repeat
-            if same_charclass?(i :: LL, adjoint(r), factorizer) then
-                r_left := i :: LL
-        if r_left = 0 then
-            error "bug"
-        -- now try if r gives a left hand global factor
-        t := try_factorization(r_left, fl, bound, sng, f, eb, 0, "use adjoint")
-        if t ~= "failed" then
-            return t :: List L
-        -- now try more terms
-        t := try_factorization(r, degree(f)-1, bound, sng, f, eb, fl+1, "")
-        if t ~= "failed" then
-            return t :: List L
-        t := try_factorization(r_left, degree(f)-1, bound, sng, f, eb, fl+1,
-                               "use adjoint")
-        if t ~= "failed" then
-            return t :: List L
-        if gcd(degree(f), degree(r)) = 1 then
-            return [f]
-        k := value(factor_op(r, factorizer, "alg factor") :: RS) :: LA
-        l : LL
-        if degree(k.rami) = 1 then
-            l := k.ope
-        else if k.dext = 1 then
-            return [f]
-        else
-            l := make_rightfactor(r, k)
-        t := try_factorization(l, fl, bound, sng, f, 0, 0, "")
-        if t ~= "failed" then
-            return t :: List L
-        [f]
 
     l_p(f, p) ==
         lpf : L := 0
