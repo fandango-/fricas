@@ -453,7 +453,12 @@ ElementaryRischDEX(R, F) : Exports == Implementation where
   Exports ==> with
 
     ei_int : (Z, F, F, SE) -> PSOL2
+      ++ ei_int(n, f, g, x) returns \spad{[h, u, t, s]} such that
+      ++ \spad{u*exp(n*f) = (h*exp(n*f))' + t'} where t involves
+      ++ special functions.  When s is true then \spad{f = u}, otherwise
+      ++ ei_int returns partial answer,
     mk_erf : (F, F) -> F
+      ++ mk_erf(u, f) should be local but conditional
 
   Implementation ==> add
     import from IntegrationTools(R, F)
@@ -463,6 +468,45 @@ ElementaryRischDEX(R, F) : Exports == Implementation where
                                                              K, R, P, F)
     ALGOP := '%alg
     PRIM := 'prim
+
+    top_kernel(f : F, g : F, x : SE) : K ==
+        lkf := varselect(kernels(f), x)
+        lk := union(varselect(kernels(g), x), lkf)
+        tk := first lk
+        htk := height(tk)
+        extra_tk : Boolean := not(member?(tk, lkf))
+        for k in rest(lk) repeat
+            hk := height(k)
+            hk > htk =>
+                tk := k
+                htk := hk
+                extra_tk := not(member?(tk, lkf))
+            hk < htk => "iterate"
+            is?(tk, 'exp) and extra_tk => "iterate"
+            is?(k, 'exp) and not(member?(k, lkf)) =>
+                tk := k
+                extra_tk := true
+            is?(tk, 'exp) => "iterate"
+            is?(k, 'exp) =>
+                tk := k
+                extra_tk := false
+            is?(tk, 'log) and extra_tk => "iterate"
+            is?(k, 'log) and not(member?(k, lkf)) =>
+                tk := k
+                extra_tk := true
+            is?(tk, 'log) => "iterate"
+            is?(k, 'log) =>
+                tk := k
+                extra_tk := false
+            if has?(operator tk, ALGOP)$BasicOperator then
+                has?(operator k, ALGOP)$BasicOperator =>
+                    extra_tk => "iterate"
+                    if not(member?(k, lkf)) then
+                        tk := k
+                        extra_tk := true
+                tk := k
+                extra_tk := not(member?(k, lkf))
+        tk
 
     import from OutputForm
 
@@ -1647,7 +1691,7 @@ ElementaryRischDEX(R, F) : Exports == Implementation where
             gden1 := monomial(1, (s_deg quo l1)::N)$UP*gden1
         [gden1, l1]
 
-    -- Remove normal part of denomianator of r via integration
+    -- Remove normal part of denominator of r via integration
     -- by parts, leaving only special denominator
     -- normal prime factors of denom(r) must divide ndenf
     special_Hermite(r : RF, nfp : UP, ndenf : UP, denfp : UP,
@@ -1875,7 +1919,7 @@ ElementaryRischDEX(R, F) : Exports == Implementation where
         f := n*f
         (fp := D(f, x)) = 0 =>
             do_risch_DE(f, g, x, lk)$ElementaryRischDEX2(R, F)
-        k := kmax(lk)
+        k := top_kernel(f, g, x)
         lk := [kk for kk in lk | kk ~= k]
         has?(operator k, ALGOP)$BasicOperator =>
             ei_int_alg(1, f, g, x, k, lk)
