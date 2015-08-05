@@ -1186,6 +1186,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             eb := eb + k.dxt
         bound := [-bound(degree(f) - j) + j * eb :: FZ for j in 1..degree(f)-1]
         eb := compute_bound(singularities, factorizer, 0)
+        singa : CB := set [[i.point, adjoint(i.lpf), i.dxt]
+                           for i in members(singularities)]
+        eba : Integer := compute_bound(singa, factorizer, 0)
         all_one := true
         -- the singularities we have considered
         done_s : FG := []
@@ -1216,7 +1219,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             done_sa := append(done_sa, [[i.sing, vrs]])
             for j in vrs repeat
                 t := try_factorization(j :: LL, floor(degree(f) /$FZ 2), bound,
-                                       i.sing, f, eb, 0, "use adjoint")
+                                       i.sing, f, eba, 0, "use adjoint")
                 if t ~= "failed" then
                     return t :: List L
         -- now try the same but searching for higher order factors
@@ -1228,7 +1231,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     return t :: List L
             for j in ia.arf repeat
                 t := try_factorization(j :: LL, degree(f)-1, bound, i.sing, f,
-                                       eb, floor(degree(f) /$FZ 2)+1, "use adjoint")
+                                       eba, floor(degree(f) /$FZ 2)+1, "use adjoint")
                 if t ~= "failed" then
                     return t :: List L
         if all_one then
