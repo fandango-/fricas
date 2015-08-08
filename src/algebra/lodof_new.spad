@@ -1150,7 +1150,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             return cons(leadingCoefficient(f) * v(1), [v(i) for i in 2..#v])
         if degree(f) = 2 then
             -- may be faster
-            return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+            -- return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+            print("Better to use old factorizer" :: OutputForm)
         dlc := [denom(coefficient(f, e)) for e in minimumDegree(f)..degree(f)]
         (dlc :=
         squareFreeBasis(dlc)$CylindricalAlgebraicDecompositionUtilities(F, UP))
@@ -1204,7 +1205,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
         if all_one then
             -- f has only 1 exponential part
-            return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+            -- return factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+            print("Better to use old factorizer" :: OutputForm)
         all_one := true
         done_sa : FG := []
         for i in done_s repeat
@@ -1263,7 +1265,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     if t ~= "failed" then
                         return t :: List L
         -- may be incomplete
-        factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+        -- factor(f)$LinearOrdinaryDifferentialOperatorFactorizer(F, UP)
+        print("Try the old factorizer" :: OutputForm)
+        [f]
 
     testfg(f, factorizer) ==
         factor_global(f, factorizer)
