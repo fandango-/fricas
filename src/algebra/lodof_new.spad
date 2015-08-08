@@ -1050,12 +1050,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         "failed"
 
     try_factorization2(fl, n, bound, eb, nstep) ==
-        acc : Integer := 0
-        flm := [map((x : UTS) : UTS +-> truncate(x, qcoerce(acc+nstep-1)), i)
-                for i in fl]
-        acc := acc + nstep
+        acc : Integer := nstep
         lv : List Vector SUP
-        lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in flm]
+        lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in fl]
         eta : List NonNegativeInteger
         eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
         hps := hp_solve(lv, eta)$VectorHermitePadeSolver
@@ -1075,10 +1072,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         sm_old : List SUP := []
         while sm ~= sm_old or sm.last = 0 repeat
             sm_old := sm
-            flm := [map((x : UTS) : UTS +-> truncate(x, qcoerce(acc+nstep-1)), i)
-                    for i in fl]
             acc := acc + nstep
-            lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in flm]
+            lv := [vector([makeSUP(convertUTStoUP(j,acc)) for j in i]) for i in fl]
             hps := hp_solve(lv, eta)$VectorHermitePadeSolver
             sm := []
             for j in minci..maxci repeat
