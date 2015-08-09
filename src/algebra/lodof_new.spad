@@ -3,9 +3,10 @@ VectorHermitePadeSolver : Exports == Implementation where
   F ==> Expression(Integer)
   SUP ==> SparseUnivariatePolynomial(F)
   Exports ==> with
-      hp_solve : (List Vector(SUP), List(NonNegativeInteger)) -> Matrix SUP
-        +++ hp_solve(lv, eta) solves Hermite-Pade problem with degree
-        +++ bound eta
+      hp_solve : (List Vector(SUP), List(NonNegativeInteger),
+                  NonNegativeInteger) -> Matrix SUP
+        +++ hp_solve(lv, eta, K) solves Hermite-Pade problem with degree
+        +++ bound eta up to order K.
   Implementation ==> add
 
     FFFG ==> FractionFreeFastGaussian(F, SUP)
@@ -14,7 +15,9 @@ VectorHermitePadeSolver : Exports == Implementation where
                 ) : ((NonNegativeInteger, NonNegativeInteger, SUP) -> F) ==
         (k, l, g) +-> DiffAction(k, m*l, g)$FFFG
 
-    hp_solve(lv, eta) ==
+    hp_solve(lv, eta, K) ==
+        print("hp_solve"::OutputForm)
+        print(eta::OutputForm)
         m := #first(lv)
         lpp : List(SUP) := []
         for v in lv repeat
@@ -26,9 +29,23 @@ VectorHermitePadeSolver : Exports == Implementation where
                 pp := pp + monomial(1, (i-1)::NonNegativeInteger)$SUP*pp1
             lpp := cons(pp, lpp)
         lpp := reverse!(lpp)
-        sumEta := reduce(_+, eta)
-        C : List(F) := [0 for i in 1..sumEta]
-        generalInterpolation(C, power_action(m), vector(lpp), eta)$FFFG
+        vd : Vector Integer := vector([ei::Integer for ei in eta])
+        C : List(F) := [0 for i in 1..K]
+        res1 := generalInterpolation(C, power_action(m), vector(lpp),
+                                     vd, K)$FFFG
+        print(vd::OutputForm)
+        n := #vd
+        n1 : NonNegativeInteger := 0
+        for i in 1..n | vd(i) >= 0 repeat
+            n1 := n1 + 1
+        print(n1::OutputForm)
+        res := new(n, n1, 0)$Matrix(SUP)
+        i1 : NonNegativeInteger := 0
+        for i in 1..n | vd(i) >= 0 repeat
+            i1 := i1 + 1
+            for j in 1..n repeat
+                res(j, i1) := res1(j, i)
+        res
 
 )abbrev package LODOFN LinearOrdinaryDifferentialOperatorFactorizerNew
 ++ Description:
@@ -1050,43 +1067,33 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         "failed"
 
     try_factorization2(fl, n, bound, eb, nstep) ==
-        acc : Integer := nstep
+        acc : Integer := (#first(fl) + 1) * (ceiling(bound(#fl-1))@Integer + eb + 1)
         lv : List Vector SUP
         lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
         eta : List NonNegativeInteger
         eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
-        hps := hp_solve(lv, eta)$VectorHermitePadeSolver
-        minci := minColIndex(hps)
-        maxci := maxColIndex(hps)
-        sm : List SUP := []
-        for j in minci..maxci repeat
-            smtmp := members(column(hps, j))
-            mr : Vector SUP := zero(#first(lv))
-            for p in smtmp for l in lv repeat
-                mr := mr + p * l
-            if zero?(mr) then
-                sm := smtmp
-                break
-        if sm = [] then
-            return "failed"
-        sm_old : List SUP := []
-        while sm ~= sm_old or sm.last = 0 repeat
-            sm_old := sm
-            acc := acc + nstep
-            lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
-            hps := hp_solve(lv, eta)$VectorHermitePadeSolver
-            sm := []
-            for j in minci..maxci repeat
-                smtmp := members(column(hps, j))
-                mr := zero(#first(lv))
-                for p in smtmp for l in lv repeat
-                    mr := mr + p * l
-                if zero?(mr) then
-                    sm := smtmp
-                    break
-            if sm = [] then
-                return "failed"
-        sm
+        sumEta := reduce(_+, eta)
+        hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
+        while ncols(hps) > 0 repeat
+            if ncols(hps) = 1 then
+                return members(column(hps, 1))
+            else
+                sm : List List SUP := []
+                for j in 1..ncols(hps) repeat
+                    smtmp := members(column(hps, j))
+                    mr : Vector SUP := zero(#first(lv))
+                    for p in smtmp for l in lv repeat
+                        mr := mr + p * l
+                    if zero?(mr) then
+                        sm := cons(smtmp, sm)
+                if sm = [] then
+                    return "failed"
+                else if #sm = 1 then
+                    return first(sm)
+                acc := acc + nstep
+                lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
+                hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
+        "failed"
 
     flist(r, order) ==
         res : List List US := []
