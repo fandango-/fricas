@@ -175,6 +175,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     flist : (LL, Integer) -> List List US
     xDn_modr : (Integer, LL) -> LL
     factor_global : (L, SUP -> Factored(SUP)) -> List L
+    factor_minmult1 : (List FZ, SG, L, Integer, Integer, LL, SUP -> Factored(SUP)) -> List L
     l_p : (L, Union(F, "infinity")) -> LL
     subsup : (UP, RF) -> RF
     compute_bound : (CB, SUP -> Factored(SUP), F) -> Integer
@@ -1016,8 +1017,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 fls := [[monomial(1, -n) * fc for fc in ff] for ff in fls]
             flst := [[retract(fc) for fc in ff] for ff in fls]
             n := #flst
-            while ((tf2 := try_factorization2(flst, n, bound, eb, nstep)) ~=
-                   "failed") repeat
+            if ((tf2 := try_factorization2(flst, n, bound, eb, nstep)) ~=
+                   "failed") then
                 flm := tf2 :: List SUP
                 sr : L3 := +/[unmakeSUP(flm(j+1))$UP :: RF * monomial(1, j)
                               for j in 0..#flm-1]
@@ -1050,7 +1051,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     re := rightGcd(f, srl)
                     if degree(re) > 0 then
                         return [rightQuotient(f, re), re]
-                    nstep := floor(3 /$FZ 2 * nstep) + 2
                 else
                     re : L
                     if sng.point = "infinity" then
@@ -1063,7 +1063,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     re := leftGcd(f, srl)
                     if degree(re) > 0 then
                         return [re, leftQuotient(f, re)]
-                    nstep := floor(3 /$FZ 2 * nstep) + 2
         "failed"
 
     try_factorization2(fl, n, bound, eb, nstep) ==
@@ -1074,10 +1073,11 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
         sumEta := reduce(_+, eta)
         hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
+        hps_old : Matrix SUP := empty()
         while ncols(hps) > 0 repeat
             if ncols(hps) = 1 then
                 return members(column(hps, 1))
-            else
+            if hps = hps_old then
                 sm : List List SUP := []
                 for j in 1..ncols(hps) repeat
                     smtmp := members(column(hps, j))
@@ -1090,9 +1090,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     return "failed"
                 else if #sm = 1 then
                     return first(sm)
-                acc := acc + nstep
-                lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
-                hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
+            hps_old := hps
+            acc := acc + nstep
+            lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
+            hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
         "failed"
 
     flist(r, order) ==
@@ -1204,6 +1205,12 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     vrs := factor_op(s.lpf, factorizer,
                                      "all right factors") :: RS
                     done_s := append(done_s, [[s, vrs]])
+                    vsp := factor_op(s.lpf, factorizer,
+                                     "semireg") :: SP
+                    for ssp in vsp for sop in vrs repeat
+                        if degree(ssp.op) = 1 and degree(sop :: LL) = 1 then
+                            return factor_minmult1(bound, s, f, eb, eba,
+                                                   sop :: LL, factorizer)
                     all_one := all_one and #vrs = 1 and degree(vrs.1 :: LL) = 1
         if all_one then
             -- f has only 1 exponential part
@@ -1245,12 +1252,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 if degree(iarf1) > 1 then
                     j1 := factor_op(iarf1, factorizer, "alg factor") :: RS
                     jj := value(j1) :: LA
-                    kk : LL
-                    if degree(jj.rami) = 1 then
-                        kk := jj.ope
-                    jj.dext = 1 => "iterate"
-                    if degree(jj.rami) ~= 1 then
-                        kk := make_rightfactor(iarf1, jj)
+                    kk := make_rightfactor(iarf1, jj)
                     t := try_factorization(kk, degree(f)-1, bound, s.sing, f, 0,
                                            0, "")
                     if t ~= "failed" then
@@ -1273,6 +1275,45 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
 
     testfg(f, factorizer) ==
         factor_global(f, factorizer)
+
+    factor_minmult1(bound, sng, f, eb, eba, r, factorizer) ==
+        fl := floor(degree(f) /$FZ 2)
+        t := try_factorization(r, fl, bound, sng, f, eb, 0, "")
+        if t ~= "failed" then
+            return t :: List L
+        w := factor_op(adjoint(sng.lpf), factorizer, "all right factors") :: RS
+        r_left : LL := 0
+        for i in w while r_left = 0 repeat
+            if same_charclass?(i :: LL, adjoint(r), factorizer) then
+                r_left := i :: LL
+        if r_left = 0 then
+            error "bug"
+        -- now try if r gives a left hand global factor
+        t := try_factorization(r_left, fl, bound, sng, f, eba, 0, "use adjoint")
+        if t ~= "failed" then
+            return t :: List L
+        -- now try more terms
+        t := try_factorization(r, degree(f)-1, bound, sng, f, eb, fl+1, "")
+        if t ~= "failed" then
+            return t :: List L
+        t := try_factorization(r_left, degree(f)-1, bound, sng, f, eba, fl+1,
+                               "use adjoint")
+        if t ~= "failed" then
+            return t :: List L
+        if gcd(degree(f), degree(r)) = 1 then
+            return [f]
+        k := value(factor_op(r, factorizer, "alg factor") :: RS) :: LA
+        l : LL
+        if degree(k.rami) = 1 then
+            l := k.ope
+        else if k.dext = 1 then
+            return [f]
+        else
+            l := make_rightfactor(r, k)
+        t := try_factorization(l, fl, bound, sng, f, 0, 0, "")
+        if t ~= "failed" then
+            return t :: List L
+        [f]
 
     l_p(f, p) ==
         lpf : L := 0
