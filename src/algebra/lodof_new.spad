@@ -171,7 +171,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     lift_rightfactor : (PositiveInteger, LA) -> LL
     same_charclass? : (LL, LL, SUP -> Factored(SUP)) -> Boolean
     try_factorization : (LL, Integer, List FZ, SG, L, Integer, Integer, String) -> TF
-    try_factorization2 : (List List UTS, Integer, List FZ, Integer, Integer) -> T2
+    try_factorization2 : (List List UTS, Integer, List FZ, Integer) -> T2
     flist : (LL, Integer) -> List List US
     xDn_modr : (Integer, LL) -> LL
     factor_global : (L, SUP -> Factored(SUP)) -> List L
@@ -1006,7 +1006,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
 -- global factor.
 -- output: "failed" or a global factorization.
     try_factorization(r, max_order, bound, sng, f, eb, min_order, option) ==
-        nstep : Integer := 4
         for i in max(degree(r), min_order)..max_order repeat
             fls := flist(r, i)
             n : Integer := 0
@@ -1017,8 +1016,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 fls := [[monomial(1, -n) * fc for fc in ff] for ff in fls]
             flst := [[retract(fc) for fc in ff] for ff in fls]
             n := #flst
-            if ((tf2 := try_factorization2(flst, n, bound, eb, nstep)) ~=
-                   "failed") then
+            if ((tf2 := try_factorization2(flst, n, bound, eb)) ~= "failed") then
                 flm := tf2 :: List SUP
                 sr : L3 := +/[unmakeSUP(flm(j+1))$UP :: RF * monomial(1, j)
                               for j in 0..#flm-1]
@@ -1065,35 +1063,30 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                         return [re, leftQuotient(f, re)]
         "failed"
 
-    try_factorization2(fl, n, bound, eb, nstep) ==
-        acc : Integer := (#first(fl) + 1) * (ceiling(bound(#fl-1))@Integer + eb + 1)
+    try_factorization2(fl, n, bound, eb) ==
+        acc : Integer := (#first(fl) + 1) * (ceiling(bound(#fl-1))@Integer
+                                             + eb + 1)
+        nstep := ceiling(acc /$FZ 8)
         lv : List Vector SUP
         lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
         eta : List NonNegativeInteger
         eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
-        sumEta := reduce(_+, eta)
-        hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
-        hps_old : Matrix SUP := empty()
+        hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
         while ncols(hps) > 0 repeat
             if ncols(hps) = 1 then
-                return members(column(hps, 1))
-            if hps = hps_old then
-                sm : List List SUP := []
-                for j in 1..ncols(hps) repeat
-                    smtmp := members(column(hps, j))
-                    mr : Vector SUP := zero(#first(lv))
-                    for p in smtmp for l in lv repeat
-                        mr := mr + p * l
-                    if zero?(mr) then
-                        sm := cons(smtmp, sm)
-                if sm = [] then
+                acc := acc + nstep
+                lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f])
+                       for f in fl]
+                hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
+                if ncols(hps) = 1 then
+                    return members(column(hps, 1))
+                else
                     return "failed"
-                else if #sm = 1 then
-                    return first(sm)
-            hps_old := hps
             acc := acc + nstep
-            lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
-            hps := hp_solve(lv, eta, sumEta)$VectorHermitePadeSolver
+            nstep := floor(3 /$FZ 2 * nstep) + 2
+            lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f])
+                   for f in fl]
+            hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
         "failed"
 
     flist(r, order) ==
