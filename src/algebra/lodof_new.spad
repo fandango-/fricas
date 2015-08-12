@@ -1300,19 +1300,6 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                                "use adjoint")
         if t ~= "failed" then
             return t :: List L
-        if gcd(degree(f), degree(r)) = 1 then
-            return [f]
-        k := value(factor_op(r, factorizer, "alg factor") :: RS) :: LA
-        l : LL
-        if degree(k.rami) = 1 then
-            l := k.ope
-        else if k.dext = 1 then
-            return [f]
-        else
-            l := make_rightfactor(r, k)
-        t := try_factorization(l, fl, bound, sng, f, 0, 0, "")
-        if t ~= "failed" then
-            return t :: List L
         [f]
 
     l_p(f, p) ==
