@@ -1064,30 +1064,23 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
         "failed"
 
     try_factorization2(fl, n, bound, eb) ==
-        acc : Integer := (#first(fl) + 1) * (ceiling(bound(#fl-1))@Integer
-                                             + eb + 1)
-        nstep := ceiling(acc /$FZ 8)
         lv : List Vector SUP
-        lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f]) for f in fl]
         eta : List NonNegativeInteger
-        eta := [qcoerce(ceiling(bound(#lv-1))@Integer + eb) for i in 1..n]
-        hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
-        while ncols(hps) > 0 repeat
-            if ncols(hps) = 1 then
-                acc := acc + nstep
-                lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f])
-                       for f in fl]
-                hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
-                if ncols(hps) = 1 then
-                    return members(column(hps, 1))
-                else
-                    return "failed"
-            acc := acc + nstep
-            nstep := floor(3 /$FZ 2 * nstep) + 2
+        cb := ceiling(bound(#fl-1))@Integer + eb
+        eta := [qcoerce(cb) for i in 1..n]
+        cnt := #fl*(cb + 1)
+        vdim := #first(fl)
+        acc := (cnt + vdim + 3) quo vdim
+        nstep := ceiling(acc * 2 / 3)
+        repeat
             lv := [vector([makeSUP(convertUTStoUP(g,acc)) for g in f])
                    for f in fl]
             hps := hp_solve(lv, eta, qcoerce(acc))$VectorHermitePadeSolver
-        "failed"
+            ncols(hps) = 1 => return members(column(hps, 1))
+            ncols(hps) = 0 => return "failed"
+            -- increase acc
+            acc := acc + nstep
+            nstep := floor(3 /$FZ 2 * nstep) + 2
 
     flist(r, order) ==
         res : List List US := []
@@ -1397,8 +1390,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                     ma := max(-(cq :: FZ), ma :: FZ)
             if ma = "-infinity" then
                 -- there are no 1st order factors
-                res := 0
-                break
+                return 0
             res := res + sg.dxt * ma :: FZ
         max(0, floor(res))
 
