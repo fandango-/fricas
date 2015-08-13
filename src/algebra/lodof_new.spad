@@ -430,7 +430,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
 -- number of terms in the 2 lists is given by dgl+1 and dgr+1 respectively.
     listream_coefs(slr, dgl, dgr, shift, slop) ==
         sle := map((landr : F2) : LL +-> landr.Qt, slr)
-        le := denom(slop) * retract(shift)@Integer
+        le := retract(denom(slop) * shift)@Integer
         le := le - numer(slop) * dgl
         lsc := listream_coefsop(sle, dgl, le, slop)
         sre := map((landr : F2) : LL +-> landr.Rt, slr)
@@ -512,10 +512,10 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             s := extendedEuclidean(r_low, l_low, 1) :: Record(coef1 : UP, coef2 : UP)
             c1 := s.coef1
             c2 := s.coef2
-            le : Integer := denom(slop) * retract(shift)@Integer
+            le : Integer := retract(denom(slop) * shift)@Integer
             le := le - numer(slop) * dgl
             re : Integer := -(numer(slop) * dgr)
-            fe : Integer := denom(slop) * retract(shift)@Integer
+            fe : Integer := retract(denom(slop) * shift)@Integer
             fe := fe - numer(slop) * degree(ff)
             for i in (n_l-1)*denom(slop)..n_l*denom(slop)-1 repeat
                 r_extra : LL
