@@ -53,9 +53,8 @@ VectorHermitePadeSolver : Exports == Implementation where
 ++ factorizer for linear ordinary differential operators whose coefficients
 ++ are rational functions.
 ++ Keywords: differential equation, ODE, LODO, factoring
-LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl where
+LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
   var : Symbol
-  cen : Expression Integer
 
   F ==> Expression Integer
   K ==> Kernel F
@@ -64,10 +63,9 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
   RF ==> Fraction UP
   SUP ==> SparseUnivariatePolynomial(F)
   L  ==> LinearOrdinaryDifferentialOperator1 RF
-  L2 ==> LinearOrdinaryDifferentialOperator2(UP, RF)
   L3 ==> LinearOrdinaryDifferentialOperator3(F, UP, RF)
-  UTS ==> UnivariateTaylorSeries(F, var, cen)
-  US ==> UnivariateLaurentSeries(F, var, cen)
+  UTS ==> UnivariateTaylorSeries(F, var, 0)
+  US ==> UnivariateLaurentSeries(F, var, 0)
   LL ==> LinearOrdinaryDifferentialOperator3(F, UTS, US)
   PO ==> Record(x : Integer, y : Integer)
   FZ ==> Fraction Integer
@@ -181,22 +179,19 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
     compute_bound : (CB, SUP -> Factored(SUP), F) -> Integer
 
     convertUPtoUTS(np) ==
-        tools := UTSodetools(F, UP, L2, UTS)
-        UP2UTS(np)$tools
+        np :: UTS
 
     convertUTStoUP(ns, n) ==
-        tools := UTSodetools(F, UP, L2, UTS)
-        UTS2UP(ns, qcoerce(n-1))$tools
+        univariatePolynomial(ns, qcoerce(n-1))
 
     convertL3toLL(f) ==
-        tools := UTSodetools(F, UP, L2, UnivariateTaylorSeries(F, var, cen))
-        apf : LinearOrdinaryDifferentialOperator3(F, UTS, US) := 0
+        apf : LL := 0
         ftmp := f
         while ftmp ~= 0 repeat
             lc := leadingCoefficient(ftmp)
-            den := UP2UTS(denom lc) :: US
+            den := convertUPtoUTS(denom lc) :: US
             apf := (apf +
-                    monomial((UP2UTS(numer lc)$tools *
+                    monomial((convertUPtoUTS(numer lc) *
                     recip(den) :: US), degree(ftmp)))
             ftmp := reductum ftmp
         apf
@@ -652,7 +647,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
             va := value(factor_op(f, factorizer, "alg factor") :: RS)
             if va case LL then
                 vr : LA
-                vr := [va, 1, 0, monomial(1, 1)]
+                vr := [va :: LL, 1, 0, monomial(1, 1)]
             else
                 vr := va :: LA
             xx : UP := monomial(1, 1)
@@ -745,7 +740,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 for i in vrs repeat
                     if i case LL then
                         nt : LA
-                        nt := [i, qcoerce(degree(npf.factor)), gr, monomial(1, 1)]
+                        nt := [i :: LL, qcoerce(degree(npf.factor)), gr,
+                               monomial(1, 1)]
                         res := append(res, [nt])
                     else
                         res := append(res, [i])
@@ -777,7 +773,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var, cen) : Exports == Impl wher
                 for i in vrs repeat
                     nt : LA
                     if i case LL then
-                        nt := [i, 1, 0, r]
+                        nt := [i :: LL, 1, 0, r]
                     else
                         ir := i :: LA
                         nt := [ir.ope, ir.dext, ir.alpha, eval(r, monomial(1,1), ir.rami)]
