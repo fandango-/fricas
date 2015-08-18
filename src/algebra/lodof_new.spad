@@ -89,6 +89,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
   GE ==> List Record(ecs : List US, ecr : UP, ect : RF)
   POLYCATQ ==> PolynomialCategoryQuotientFunctions(IndexedExponents(K),
                                                    K, Integer, P, F)
+  GEM ==> List Record(fos : SP, mge : List US)
 
   Exports ==> with
     testnp : L3 -> List(Record(point : PO, slope : FZ, npoly : UP))
@@ -176,7 +177,8 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
     factor_minmult1 : (List FZ, SG, L, Integer, Integer, LL, SUP -> Factored(SUP)) -> List L
     l_p : (L, Union(F, "infinity")) -> LL
     subsup : (UP, RF) -> RF
-    compute_bound : (CB, SUP -> Factored(SUP), F) -> Integer
+    compute_bound : (CB, GEM, F) -> Integer
+    ge_minimal : (CB, SUP -> Factored(SUP)) -> GEM
 
     convertUPtoUTS(np) ==
         np :: UTS
@@ -1171,25 +1173,25 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
                 bound(i) := bound(i) + s.dxt * v(i+1)
             eb := eb + s.dxt
         bound := [-bound(degree(f) - j) + j * eb :: FZ for j in 1..degree(f)-1]
-        eb := compute_bound(singularities, factorizer, 0)
+        gem := ge_minimal(singularities, factorizer)
+        eb := compute_bound(singularities, gem, 0)
         singa : CB := set [[s.point, adjoint(s.lpf), s.dxt]
                            for s in members(singularities)]
-        eba : Integer := compute_bound(singa, factorizer, 0)
+        gema := ge_minimal(singa, factorizer)
+        eba : Integer := compute_bound(singa, gema, 0)
         all_one := true
         -- the singularities we have considered
         done_s : FG := []
         while not empty?(singularities) repeat
             dl : List PositiveInteger := [s.dxt for s in members(singularities)]
             min_deg := reduce(min, dl)
-            for s in members(singularities) repeat
+            for s in members(singularities) for ge in gem repeat
                 if s.dxt = min_deg then
                     singularities := difference(singularities, s)
                     vrs := factor_op(s.lpf, factorizer,
                                      "all right factors") :: RS
                     done_s := append(done_s, [[s, vrs]])
-                    vsp := factor_op(s.lpf, factorizer,
-                                     "semireg") :: SP
-                    for ssp in vsp for sop in vrs repeat
+                    for ssp in ge.fos for sop in vrs repeat
                         if degree(ssp.op) = 1 and degree(sop :: LL) = 1 then
                             return factor_minmult1(bound, s, f, eb, eba,
                                                    sop :: LL, factorizer)
@@ -1343,30 +1345,18 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
             ftmp := reductum ftmp
         res
 
-    compute_bound(singularities, factorizer, rlc) ==
+    compute_bound(singularities, gem, rlc) ==
         res : FZ := 0
-        for sg in members(singularities) repeat
-            -- compute the generalized exponents
-            v := factor_op(sg.lpf, factorizer, "semireg") :: SP
+        for sg in members(singularities) for ge in gem repeat
             ma : Union(FZ, "-infinity") := "-infinity"
-            for f in v for ji in 1..#v repeat
+            for f in ge.mge for fps in ge.fos for ji in 1..#ge.mge repeat
+                r := degree(fps.ram)
                 -- c = - an exponent; bound = - sum exponents
-                r := degree(f.ram)
-                -- semi-regular part
-                s := f.op
-                es := [retract(rootOf(g.factor))@FZ
-                       for g in factors(factorizer(make_poly(s)))]
-                ms := reduce(min, es) :: F
-                -- now add expart, then divide by r
-                c := coefficient(ms :: US + f.expart, 0) / (r :: F)
-                for jj in rest(v, ji) repeat
-                    rjj := degree(jj.ram)
-                    sjj := jj.op
-                    esjj := [retract(rootOf(g.factor))@FZ
-                             for g in factors(factorizer(make_poly(sjj)))]
-                    msjj := reduce(min, esjj) :: F
-                    vpei := order(ms :: US + f.expart, 0) / r
-                    vpej := order(msjj :: US + jj.expart, 0) / rjj
+                c := coefficient(f, 0)
+                for jj in rest(ge.mge, ji) for fpsjj in rest(ge.fos, ji) repeat
+                    rjj := degree(fpsjj.ram)
+                    vpei := order(f, 0) / r
+                    vpej := order(jj, 0) / rjj
                     c := c + min(vpei, vpej) :: F
                 -- now compute the trace of this algebraic number divided by
                 -- the degree of this number over Q
@@ -1377,7 +1367,7 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
                         c := get_trace(c, ke) / (degree(minPoly(ke)) :: F)
                     else
                         if eval(denominator(c), ke, rlc) = 0 then
-                            return compute_bound(singularities,factorizer,rlc+1)
+                            return compute_bound(singularities, gem, rlc + 1)
                         c := eval(c, ke, rlc)
                 cq := retract(c)@FZ
                 if ma = "-infinity" then
@@ -1407,6 +1397,22 @@ LinearOrdinaryDifferentialOperatorFactorizerNew(var) : Exports == Impl where
             else
                 tr := (monomial(1, 1) - p :: F :: UP) :: RF
             res := append(res, [[ss, e.ram, tr]])
+        res
+
+    ge_minimal(singularities, factorizer) ==
+        res : GEM := []
+        for sg in members(singularities) repeat
+            v := factor_op(sg.lpf, factorizer, "semireg") :: SP
+            mg : List US := []
+            for e in v repeat
+                r := degree(e.ram)
+                s := e.op
+                es := [retract(rootOf(g.factor))@FZ
+                       for g in factors(factorizer(make_poly(s)))]
+                ms := reduce(min, es) :: F
+                ss := (ms :: US + e.expart) / (r :: F)
+                mg := append(mg, [ss])
+            res := append(res, [[v, mg]])
         res
 
 --Copyright (c) 2015, Abhinav Baid.
