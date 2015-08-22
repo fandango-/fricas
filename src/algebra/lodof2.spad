@@ -128,13 +128,15 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
     ++ test function.
     testlp : (L, Union(F, "infinity")) -> LL
     ++ test function.
-    factor : (L, SUP -> Factored(SUP)) -> List L
+    factor : (L, (SUP, List F) -> Factored(SUP), List F) -> List L
     ++ to be documented later.
     testis : L -> Boolean
     ++ test function.
     testgt : (F, K) -> F
     ++ test function.
-    gen_exp : (L, Union(F, "infinity"), SUP -> Factored(SUP)) -> GE
+    gen_exp : (L, Union(F, "infinity"), (SUP, List F) -> Factored(SUP), List F) -> GE
+    ++ to be documented later.
+    ge_minimal : (L, SUP -> Factored(SUP), String) -> GEM
     ++ to be documented later.
 
   Impl ==> add
@@ -178,7 +180,6 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
     l_p : (L, Union(F, "infinity")) -> LL
     subsup : (UP, RF) -> RF
     compute_bound : (GEM, F) -> Integer
-    ge_minimal : (L, SUP -> Factored(SUP), String) -> GEM
 
     convertUPtoUTS(np) ==
         np :: UTS
@@ -1072,16 +1073,17 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
         coefa := coefficient(a, qcoerce(degree(r)-1))
         monomial(1, 1)$LL * a + a * monomial(1, 1)$LL - coefa * r
 
-    factor(f, factorizer) ==
+    factor(f, factorizer, y) ==
         if degree(f) <= 1 then
             return [f]
-        b := factor_global(f, factorizer)
+        factorizer2 := ((x : SUP) : Factored(SUP) +-> factorizer(x, y))
+        b := factor_global(f, factorizer2)
         if #b = 1 then
             return b
         else
-            res := concat(factor(b.1, factorizer), factor(b.2, factorizer))
+            res := concat(factor(b.1, factorizer, y), factor(b.2, factorizer, y))
             for i in 3..#b repeat
-                concat!(res, factor(b.i, factorizer))
+                concat!(res, factor(b.i, factorizer, y))
             return res
 
     inf_singularity?(f : L) : Boolean ==
@@ -1341,15 +1343,16 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
             res := res + ge.singularity.dxt * ma :: FZ
         max(0, floor(res))
 
-    gen_exp(f, p, factorizer) ==
-        v := factor_op(l_p(f, p), factorizer, "semireg") :: SP
+    gen_exp(f, p, factorizer, y) ==
+        factorizer2 := ((x : SUP) : Factored(SUP) +-> factorizer(x, y))
+        v := factor_op(l_p(f, p), factorizer2, "semireg") :: SP
         res : GE := []
         for e in v repeat
             -- ramification index
             r := degree(e.ram)
             -- semi-regular part
             s := e.op
-            es := [rootOf(g.factor) for g in factors(factorizer(make_poly(s)))]
+            es := [rootOf(g.factor) for g in factors(factorizer2(make_poly(s)))]
             -- now add expart, then divide by r
             ss := [(root :: US + e.expart) / (r :: F) for root in es]
             tr : RF
