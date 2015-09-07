@@ -53,8 +53,9 @@ VectorHermitePadeSolver : Exports == Implementation where
 ++ factorizer for linear ordinary differential operators whose coefficients
 ++ are rational functions.
 ++ Keywords: differential equation, ODE, LODO, factoring
-LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
+LinearOrdinaryDifferentialOperatorFactorizer2(var, cen) : Exports == Impl where
   var : Symbol
+  cen : Expression Integer
 
   F ==> Expression Integer
   K ==> Kernel F
@@ -64,8 +65,8 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var) : Exports == Impl where
   SUP ==> SparseUnivariatePolynomial(F)
   L  ==> LinearOrdinaryDifferentialOperator1 RF
   L3 ==> LinearOrdinaryDifferentialOperator3(F, UP, RF)
-  UTS ==> UnivariateTaylorSeries(F, var, 0)
-  US ==> UnivariateLaurentSeries(F, var, 0)
+  UTS ==> UnivariateTaylorSeries(F, var, cen)
+  US ==> UnivariateLaurentSeries(F, var, cen)
   LL ==> LinearOrdinaryDifferentialOperator3(F, UTS, US)
   PO ==> Record(x : Integer, y : Integer)
   FZ ==> Fraction Integer
