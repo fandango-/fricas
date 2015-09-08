@@ -9,11 +9,7 @@ qF := Expression(Integer)
 uP := UnivariatePolynomial('x, qF)
 rF := Fraction(uP)
 L1 := LinearOrdinaryDifferentialOperator1(rF)
-<<<<<<< HEAD
-lF := LinearOrdinaryDifferentialOperatorFactorizer2('x)
-=======
 lF := LinearOrdinaryDifferentialOperatorFactorizer2('x, 0)
->>>>>>> e10366610954480b402c09085ed652d4deb538ea
 
 d := D()$L1
 xx := x::uP::rF

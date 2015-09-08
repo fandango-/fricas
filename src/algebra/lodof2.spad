@@ -16,11 +16,6 @@ VectorHermitePadeSolver : Exports == Implementation where
         (k, l, g) +-> DiffAction(k, m*l, g)$FFFG
 
     hp_solve(lv, eta, K) ==
-<<<<<<< HEAD
-        print("hp_solve"::OutputForm)
-        print(eta::OutputForm)
-=======
->>>>>>> e10366610954480b402c09085ed652d4deb538ea
         m := #first(lv)
         lpp : List(SUP) := []
         for v in lv repeat
@@ -36,18 +31,10 @@ VectorHermitePadeSolver : Exports == Implementation where
         C : List(F) := [0 for i in 1..K]
         res1 := generalInterpolation(C, power_action(m), vector(lpp),
                                      vd, K)$FFFG
-<<<<<<< HEAD
-        print(vd::OutputForm)
-=======
->>>>>>> e10366610954480b402c09085ed652d4deb538ea
         n := #vd
         n1 : NonNegativeInteger := 0
         for i in 1..n | vd(i) >= 0 repeat
             n1 := n1 + 1
-<<<<<<< HEAD
-        print(n1::OutputForm)
-=======
->>>>>>> e10366610954480b402c09085ed652d4deb538ea
         res := new(n, n1, 0)$Matrix(SUP)
         i1 : NonNegativeInteger := 0
         for i in 1..n | vd(i) >= 0 repeat
@@ -1437,10 +1424,3 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var, cen) : Exports == Impl where
 --LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 --NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 --SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-<<<<<<< HEAD
--- Compile order for the differential equation solver:
--- oderf.spad  odealg.spad  nlode.spad  nlinsol.spad  riccati.spad
--- kovacic.spad  lodof.spad  odeef.spad
-=======
->>>>>>> e10366610954480b402c09085ed652d4deb538ea
