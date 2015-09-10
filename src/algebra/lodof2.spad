@@ -278,14 +278,13 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var, cen) : Exports == Impl where
             else
                 -- regular singular case, we compute the unsafe factors
                 unsafe := []
-                semi : Table(FA, UP) := table()
-                for i in v repeat
-                    semi(i) := i.factor ^ qcoerce(i.exponent)
-                for i in v for ii in 1..(#v)-1 repeat
-                    restl := rest(v, ii)
+                semi : OneDimensionalArray(UP) := new(#v, 0)
+                for i in v for ii in 1..#v repeat
+                    semi(ii) := i.factor ^ qcoerce(i.exponent)
+                for i in v for ii in 1..#v for restl in tails(rest(v)) repeat
                     vif : UP := i.factor
                     dvif := degree(vif)
-                    for j in restl repeat
+                    for j in restl for jj in (ii+1)..#v repeat
                         vjf : UP := j.factor
                         if dvif = degree(vjf) then
                             d := qcoerce(dvif - 1)
@@ -295,18 +294,19 @@ LinearOrdinaryDifferentialOperatorFactorizer2(var, cen) : Exports == Impl where
                                 ie := integer(e)
                                 newx : UP := monomial(1,1) + ie :: UP
                                 sbt := eval(vjf, monomial(1,1), newx)
-                                (vif - sbt) ~= 0 => "iterate"
-                                if ie > 0 then
-                                    unsafe := cons(i, unsafe)
-                                    semi(j) := (semi(j) * vif ^
-                                                qcoerce(i.exponent))
-                                else
-                                    unsafe := cons(j, unsafe)
-                                    semi(i) := (semi(i) * vjf ^
-                                                qcoerce(j.exponent))
+                                if (vif - sbt) = 0 then
+                                    if ie > 0 then
+                                        unsafe := cons(i, unsafe)
+                                        semi(jj) := (semi(jj) * vif ^
+                                                     qcoerce(i.exponent))
+                                    else
+                                        unsafe := cons(j, unsafe)
+                                        semi(ii) := (semi(ii) * vjf ^
+                                                     qcoerce(j.exponent))
+                v_old := v
                 v := setDifference(v, unsafe)
                 if option = "semireg" then
-                    v := [[semi(i), 1] for i in v]
+                    v := [[semi(position(i, v_old)), 1] for i in v]
             -- now v contains the safe right factors of slope number k
             slo := k.slope
             if degree(v(1).factor) * denom(slo) = degree(f) then
